@@ -1,30 +1,55 @@
-# Rich Text to Markdown Converter
+# Rich HTML to Markdown Converter
 
-ブラウザ上のリッチテキストをコピーし、Markdownへ変換してローカルに保存するためのツールです。
+ブラウザ上のコンテンツをHTMLとして取得し、再利用しやすいMarkdownへ変換するローカルツールです。
 
-最初の対象として ChatGPT の会話を想定していますが、特定のサービスだけに依存しない設計を目指します。
+最初の主要な対象としてChatGPTの会話を想定していますが、特定のWebサービスだけに依存せず、変換モードを追加することで他のWebサービスや一般的なHTMLへ拡張できる設計を目指します。
 
 ## 特徴
 
-* 単一の HTML ファイルとして動作
+* 単一のHTMLファイルとして動作
 * インストール不要
 * ブラウザ拡張不要
 * Webサーバー不要
-* コピーした内容をブラウザ上でMarkdownへ変換
 * 変換処理はローカルで完結
-* HTML形式のクリップボードデータを利用して文書構造を保持
-* HTMLが取得できない場合はプレーンテキストへフォールバック
+* HTMLの文書構造を利用してMarkdownへ変換
+* ChatGPTなど特定サービス向けの変換モードを利用可能
+* HTMLの種類に応じた変換モードの自動判定
+* 必要に応じた変換モードの手動選択
+* 将来的に新しいWebサービス向け変換モードを追加可能
 
-## 基本的な使い方
+## 基本的な考え方
 
-1. `richtext-to-markdown.html` をブラウザで開きます。
-2. ChatGPTなどのWebページ上で、保存したい範囲を選択してコピーします。
-3. ツールの入力欄に貼り付けます。
-4. `Convert` ボタンを押します。
-5. 生成されたMarkdownを出力欄からコピーします。
-6. `.md` ファイルとして任意の場所に保存します。
+このツールでは、プレーンテキストから文書構造を推測してMarkdownへ変換することは行いません。
 
-想定する操作フローは次のとおりです。
+見出し、リスト、コードブロック、リンク、強調などの情報を保持するため、入力はHTMLを前提とします。
+
+```text
+HTML
+  |
+  v
+Extraction
+  |
+  v
+Semantic Document
+  |
+  v
+Markdown Renderer
+  |
+  v
+Markdown
+```
+
+コピー元からHTMLを取得できない場合、その入力は本ツールの変換対象外です。
+
+## HTMLの取得方法
+
+HTMLは主に2種類の方法で取得できます。
+
+### 通常のコピー
+
+Webページ上で範囲を選択してコピーした場合、ブラウザのクリップボードに `text/html` が含まれることがあります。
+
+本ツールの入力欄へ貼り付けると、貼り付けイベントからHTMLを取得します。
 
 ```text
 Web page
@@ -33,42 +58,201 @@ Web page
    v
 Clipboard
    |
-   | Paste
+   | text/html
    v
-Rich Text to Markdown Converter
-   |
-   | Convert
-   v
-Markdown
-   |
-   v
-.md file / Obsidian / Git / editor / LLM
+Converter
 ```
 
-## リッチテキストの取得
+入力欄には確認用としてHTMLソースを表示します。
 
-通常の `textarea` に貼り付けるだけでは、太字や見出し、リストなどの情報は失われます。
+### Developer ToolsからDOMをコピー
 
-このツールでは、貼り付け後の文字列ではなく、ブラウザの `paste` イベントからクリップボードデータを取得します。
+より多くのHTML構造を取得したい場合は、ブラウザのDeveloper Toolsから対象DOM要素をコピーできます。
 
-ブラウザのクリップボードには、コピー元によって複数形式のデータが含まれます。
-
-代表的な形式は次の2つです。
+例えばChatGPTでは、Elementsパネルで対象要素を選択して `Copy element` を使用します。
 
 ```text
-text/html
-text/plain
+Developer Tools
+      |
+      | Copy element
+      v
+HTML source
+      |
+      | Paste
+      v
+Converter
 ```
 
-`text/html` が存在する場合は、これを優先してMarkdownへ変換します。
+この方法では、通常の範囲選択コピーよりも多くのDOM属性や構造を保持できることがあります。
 
-`text/html` が存在しない場合は、`text/plain` を使用します。
+ChatGPTでは例えば以下のような情報がHTML中に含まれる場合があります。
 
-入力欄に表示される内容は確認用のプレーンテキストであり、実際の変換元としては貼り付け時に取得したHTMLが使用される場合があります。
+```html
+<section
+  data-testid="conversation-turn-5"
+  data-turn="user">
+```
 
-## 保持を目指す文書構造
+また、各メッセージに次のような属性が含まれる場合があります。
 
-主に以下の構造をMarkdownへ変換します。
+```html
+<div data-message-author-role="assistant">
+```
+
+これらを利用することで、単なる見た目ではなく、UserとAssistantの区別なども抽出できます。
+
+## ChatGPTでの利用
+
+ChatGPTでは、Developer Toolsから会話を含むDOMをコピーする方法を推奨します。
+
+最も簡単な方法として、`body` 要素をコピーしてツールへ貼り付けることができます。
+
+```text
+ChatGPT
+  |
+Developer Tools
+  |
+<body>
+  |
+Copy element
+  |
+Paste into converter
+  |
+Convert
+```
+
+ツール側ではページ全体をそのままMarkdownへ変換するのではなく、ChatGPT用の変換モードによって会話部分を抽出します。
+
+例えば以下のような情報を利用できます。
+
+```text
+conversation turn
+user / assistant
+message content
+Markdown-rendered response
+code block
+table
+list
+link
+```
+
+### body全体をコピーする場合の注意
+
+`body` には会話以外の大量のHTMLも含まれます。
+
+例えば以下です。
+
+* サイドバー
+* チャット履歴
+* ナビゲーション
+* ボタン
+* SVGアイコン
+* スクリプト
+* プロフィールUI
+* その他のアプリケーションUI
+
+これらはChatGPT用変換モードによって除外されます。
+
+また、ブラウザ上のDOMに会話全体が存在しているとは限りません。
+
+長い会話では、画面外の古いメッセージがDOMから削除されている場合があります。
+
+その場合、`body` をコピーしても会話全体を取得できません。
+
+ツールは可能な範囲で不足を検出して警告しますが、完全性を保証するものではありません。
+
+長い会話では、必要に応じて会話の先頭までスクロールしてからDOMをコピーしてください。
+
+## 変換モード
+
+入力HTMLの種類ごとに「変換モード」を使用します。
+
+変換モードは、HTMLのどの部分を意味のある文書要素として抽出するかを定義します。
+
+想定するモードの例:
+
+```text
+Auto
+ChatGPT Conversation
+Generic HTML
+GitHub
+Claude
+Gemini
+...
+```
+
+初期版では少なくとも以下を想定します。
+
+### Auto
+
+入力HTMLを解析し、利用可能な変換モードを自動判定します。
+
+### ChatGPT Conversation
+
+ChatGPTのDOMから、
+
+```text
+conversation
+  |
+  +-- user message
+  |
+  +-- assistant message
+  |
+  +-- user message
+  |
+  +-- assistant message
+```
+
+という構造を抽出します。
+
+### Generic HTML
+
+サービス固有の構造を利用せず、一般的なHTML文書としてMarkdownへ変換します。
+
+## 変換処理
+
+変換処理は大きく2段階に分かれます。
+
+### 1. HTMLから意味構造を抽出
+
+変換モードが入力HTMLから必要な部分を抽出します。
+
+ChatGPTの場合は例えば、
+
+```text
+Raw ChatGPT DOM
+       |
+       v
+Conversation extraction
+       |
+       v
+User message
+Assistant message
+User message
+Assistant message
+```
+
+のようになります。
+
+### 2. 意味構造をMarkdownへ変換
+
+抽出された内容を共通Markdown Rendererで変換します。
+
+例えば、
+
+```html
+<strong>important</strong>
+```
+
+は、
+
+```markdown
+**important**
+```
+
+へ変換されます。
+
+同様に、主に以下をMarkdownへ変換します。
 
 * 見出し
 * 段落
@@ -84,66 +268,43 @@ text/plain
 * 表
 * 画像参照
 
-CSSによる視覚的なスタイルそのものを保存することは目的としていません。
+## 変換モードとMarkdownの責務
 
-例えば以下の情報は原則としてMarkdownへは保持しません。
+変換モードは、HTMLの意味を判断する役割を持ちます。
 
-* フォント
-* 文字サイズ
-* 色
-* 背景色
-* 余白
-* Webページ固有のレイアウト
+例えばChatGPT用モードは、
 
-このツールの目的は、画面の見た目を複製することではなく、再利用可能な文書構造を保存することです。
+```text
+この要素はUserのメッセージ
+この要素はAssistantのメッセージ
+この要素は本文
+この要素はUIなので無視
+```
 
-## ChatGPTでの利用
+と判断します。
 
-初期の主要な対象はChatGPTです。
+一方、
 
-ChatGPTの会話をブラウザ上で選択してコピーし、その内容をMarkdownへ変換することを想定しています。
+```text
+strong → **...**
+h2 → ## ...
+ul → Markdown list
+pre/code → fenced code block
+```
 
-ただし、コピー方法によってクリップボードへ格納されるデータは異なる可能性があります。
+といったMarkdown表現は、共通Markdown Rendererが担当します。
 
-例えば、
+この分離により、サービスごとに異なるMarkdown変換ロジックを持たせる必要がありません。
 
-* 画面上の範囲を選択してブラウザ標準のコピーを行う
-* ChatGPTの各メッセージにあるCopy機能を使用する
+## 出力例
 
-では、取得できるHTMLやプレーンテキストの形式が異なる場合があります。
+ChatGPT会話の場合、例えば次のようなMarkdownを生成します。
 
-ツールでは可能な限り入力形式を自動判定し、利用できる最も構造化されたデータを使用します。
-
-## ChatGPT以外での利用
-
-変換処理はChatGPT固有の形式だけに依存しないことを目標としています。
-
-そのため、将来的には以下のようなデータも同じ方法で扱えることを想定しています。
-
-* その他の生成AIサービス
-* Web記事
-* GitHub
-* ドキュメントサービス
-* Wiki
-* Webベースのチャット
-* その他のリッチテキストをコピー可能なWebページ
-
-ただし、HTMLの構造はサービスごとに異なるため、すべてのWebページで同じ変換結果になるとは限りません。
-
-## 保存形式
-
-基本的な保存形式としてMarkdownを使用します。
-
-例えばChatGPTの会話は、次のような形式で保存できます。
-
-```markdown
+````markdown
 ---
 source: chatgpt
-title: Example conversation
-exported_at: 2026-09-06T21:03:00+09:00
+type: conversation
 ---
-
-# Example conversation
 
 ## User
 
@@ -152,11 +313,65 @@ exported_at: 2026-09-06T21:03:00+09:00
 ## Assistant
 
 回答内容。
+
+### Example
+
+- item 1
+- item 2
+
+```js
+const value = 123;
+````
+
+````
+
+実際のメタデータや見出し形式は変換モードおよび設定によって変更される可能性があります。
+
+## ChatGPT以外への拡張
+
+本ツールはChatGPT専用コンバーターとして固定しない設計を採用します。
+
+新しいWebサービスに対応する場合、そのサービス用のExtraction Profileを追加します。
+
+例えばGitHub Issueなら、
+
+```text
+title
+author
+issue body
+comments
+````
+
+を抽出するProfileを定義できます。
+
+生成AIサービスなら、
+
+```text
+message
+role
+content
 ```
 
-Markdownを正本とすることで、特定のノートアプリケーションに依存せず保存できます。
+を抽出できます。
 
-保存したMarkdownは例えば以下で利用できます。
+一般的なWeb記事なら、
+
+```text
+title
+article body
+```
+
+を抽出できます。
+
+このため、Markdown Renderer自体をサービスごとに変更する必要はありません。
+
+## 保存形式
+
+基本的な出力形式としてMarkdownを使用します。
+
+Markdownはプレーンテキストであり、特定のアプリケーションに依存せず保存できます。
+
+例えば以下で利用できます。
 
 * VS Code
 * Obsidian
@@ -168,45 +383,58 @@ Markdownを正本とすることで、特定のノートアプリケーション
 
 ## プライバシー
 
-本ツールは単一HTMLとしてローカルで動作することを前提としています。
+本ツールは単一HTMLとしてローカルで動作します。
 
-通常の変換処理では、貼り付けたデータを外部サーバーへ送信する必要はありません。
+通常の変換処理では、貼り付けたHTMLを外部サーバーへ送信しません。
 
-配布版では、少なくとも以下を満たすことを目標とします。
+配布版では以下を原則とします。
 
 * 外部JavaScriptを読み込まない
 * 外部CSSを読み込まない
-* 変換のためのネットワーク通信を行わない
-* 入力内容をブラウザ外へ送信しない
+* Analyticsを使用しない
+* 変換処理でネットワーク通信を行わない
+* 入力HTMLを外部へ送信しない
 
-ただし、ブラウザ自身の機能やコピー元ページの動作は本ツールの管理対象外です。
+入力HTMLには会話以外の情報が含まれる場合があります。
+
+特に `body` 全体をコピーした場合、
+
+* チャット履歴
+* UI情報
+* プロフィール関連情報
+* 他のページ要素
+
+などが含まれる可能性があります。
+
+入力データは必要以上に保存・共有しないでください。
 
 ## 制限事項
 
-クリップボードに含まれるHTMLは、コピー元のWebアプリケーションとブラウザに依存します。
+本ツールは、コピー時点でHTMLに存在する情報だけを利用できます。
 
-そのため、以下の情報を常に復元できるとは限りません。
+そのため以下は保証されません。
 
-* コピー元ページのCSS
-* JavaScriptによって生成された状態
-* ユーザーとAssistantなどの意味的な区切り
-* 数式の元表現
-* Webアプリケーション固有のUI
-* 埋め込みコンテンツ
-* ローカルに存在しない画像データ
+* DOMに存在しない過去メッセージ
+* コピー元ページのCSSによる完全な外観
+* JavaScript内部状態
+* 未ロードのコンテンツ
+* 外部リソースの永続保存
+* サービス固有の非公開データ
 
-また、コピー元が `text/html` を提供しない場合は、プレーンテキストを基に変換します。
+また、ChatGPTなどのWebサービスのDOM構造は公開APIではありません。
+
+サービス側のUI変更によってExtraction Profileの更新が必要になる場合があります。
 
 ## 配布形式
 
 利用者向けの配布物は1ファイルです。
 
 ```text
-richtext-to-markdown.html
+rich-html-to-markdown.html
 ```
 
-このファイルを保存し、ブラウザで直接開いて使用します。
+このファイルをブラウザで直接開いて使用します。
 
-開発用のソースコードやテストツールは配布HTMLには必要ありません。
+Node.jsやnpmなどの開発環境は利用時には必要ありません。
 
-開発方法については `README-dev.md` を参照してください。
+開発方法およびExtraction Profileの構成については `README-dev.md` を参照してください。

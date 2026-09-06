@@ -1,6 +1,6 @@
 # Development Guide
 
-この文書では Rich Text to Markdown Converter の開発構成、テスト方針、ビルド方法を説明します。
+この文書では Rich HTML to Markdown Converter のアーキテクチャ、Extraction Profile、テスト方針、ディレクトリ構成、ビルド方法について説明します。
 
 利用者向けの仕様については `README.md` を参照してください。
 
@@ -8,96 +8,380 @@
 
 利用者には単一HTMLを配布します。
 
-一方、リポジトリ内部ではソースコードを適切に分割し、単体テスト、fixtureテスト、ブラウザテストを実行できる構成にします。
+一方、リポジトリ内部ではソースコードをモジュール化し、自動テスト可能な構成にします。
 
-つまり、単一HTMLはソースコード上の制約ではなく、ビルド成果物に対する制約として扱います。
+単一HTMLはソースコード上の制約ではなく、ビルド成果物に対する制約として扱います。
 
 ```text
-Source modules
-     |
-     | build
-     v
+Repository source
+       |
+       | build
+       v
 Single HTML
-     |
-     v
+       |
+       v
 User
 ```
 
-## 基本原則
+## アーキテクチャ
 
-開発上は以下を原則とします。
-
-### 配布物とソースを分離する
-
-開発者が巨大な単一HTMLを直接編集する構成にはしません。
-
-JavaScript、CSS、HTMLテンプレートを個別に管理し、ビルド時に単一HTMLへまとめます。
-
-### 変換ロジックとブラウザ処理を分離する
-
-Markdown変換ロジックは、可能な限りUIやClipboard APIから独立させます。
-
-概念上の依存関係は以下とします。
+変換処理は以下の段階へ分離します。
 
 ```text
-Browser UI
-    |
-    v
-Clipboard adapter
-    |
-    v
-Core converter
-    |
-    v
+Raw HTML
+   |
+   v
+Source Detection
+   |
+   v
+Extraction Profile
+   |
+   v
+Semantic Document
+   |
+   v
+Markdown Renderer
+   |
+   v
 Markdown
 ```
 
-`core` からブラウザUIを参照してはいけません。
+ブラウザUI、サービス固有のDOM解析、Markdown生成を分離することが基本方針です。
 
-### クリップボード取得と変換を分離する
+## 入力
 
-ブラウザから取得したデータは、一度共通の入力モデルへ変換します。
-
-概念的には以下のデータを扱います。
+coreが扱う入力はHTML文字列です。
 
 ```text
-ClipboardInput
-- html
-- text
-- types
+HTML source
 ```
 
-変換器はこの入力を受け取り、Markdownを返します。
+plain textからMarkdown構造を推測する機能は提供しません。
 
-これにより、本物のOSクリップボードを利用せずに変換処理を自動テストできます。
+ブラウザ層では主に2種類の入力方法を扱います。
 
-### 実データをfixtureとして保持する
+```text
+Clipboard text/html
+```
 
-ChatGPTなどから実際に取得したクリップボードHTMLをfixtureとして保存します。
+および、
 
-変換器の変更によって過去の入力に対する結果が壊れていないか、自動テストで確認します。
+```text
+Raw HTML source
+```
 
-## 想定開発環境
+です。
 
-以下を基本構成とします。
+Raw HTML sourceは、Developer Toolsの `Copy element` 等によって取得したHTML文字列を想定します。
 
-* Node.js 20以降
-* npm
-* esbuild
-* Vitest
-* Playwright
+内部では両者を最終的に、
 
-各ツールの役割は以下です。
+```text
+html: string
+```
 
-| Tool       | Purpose                  |
-| ---------- | ------------------------ |
-| Node.js    | 開発・ビルド環境                 |
-| npm        | パッケージ管理とタスク実行            |
-| esbuild    | JavaScriptのバンドル          |
-| Vitest     | Unit test / fixture test |
-| Playwright | Browser integration test |
+として統一します。
 
-プロジェクトが小規模なうちは、より大規模なWebフレームワークは使用しない方針とします。
+## 全体構成
+
+概念上の依存関係は以下です。
+
+```text
+browser
+   |
+   v
+core
+   |
+   +--> profile engine
+   |
+   +--> semantic document
+   |
+   +--> markdown renderer
+```
+
+サービス固有処理はProfileまたはProfileから呼び出されるhookとして実装します。
+
+Markdown RendererはChatGPT、GitHubなどのサービス固有知識を持ちません。
+
+## Semantic Document
+
+Extraction ProfileからMarkdownへ直接変換しません。
+
+一度、サービスに依存しない中間表現へ変換します。
+
+例えばChatGPT会話は概念的には以下です。
+
+```text
+Document
+  type: conversation
+  metadata:
+    source: chatgpt
+
+  items:
+    - type: message
+      role: user
+      content: HTML fragment
+
+    - type: message
+      role: assistant
+      content: HTML fragment
+```
+
+一般的なWebページなら、
+
+```text
+Document
+  type: document
+  content: HTML fragment
+```
+
+程度から開始します。
+
+初期実装では完全なMarkdown ASTを作る必要はありません。
+
+構造的な単位のみSemantic Documentとして正規化し、本文は必要に応じてHTML fragmentとして保持できます。
+
+## Extraction Profile
+
+サービス固有のHTML抽出規則はExtraction Profileとして定義します。
+
+Profileは、
+
+```text
+HTMLのどこを見るか
+どの要素を抽出するか
+どの属性が意味を持つか
+どの要素を無視するか
+```
+
+を宣言的に定義します。
+
+ProfileはDSLそのものではなく、まずはJSONまたはYAMLベースの宣言的設定として実装します。
+
+独自の制御構文を持つプログラミング言語にはしません。
+
+## Profileの概念例
+
+ChatGPT用Profileは概念的には以下のようになります。
+
+```yaml
+id: chatgpt-conversation
+name: ChatGPT Conversation
+documentType: conversation
+
+detect:
+  all:
+    - '[data-testid^="conversation-turn-"]'
+    - '[data-message-author-role]'
+
+items:
+  selector: '[data-testid^="conversation-turn-"]'
+
+  type: message
+
+  role:
+    attribute: data-turn
+    map:
+      user: user
+      assistant: assistant
+
+  content:
+    selectors:
+      user:
+        - '[data-message-author-role="user"]'
+      assistant:
+        - '[data-message-author-role="assistant"] .markdown'
+
+  exclude:
+    - button
+    - '[role="group"]'
+```
+
+これは仕様イメージであり、Profile schemaの正確な構文は実装時に定義します。
+
+## Profileが担当する機能
+
+初期段階では少なくとも以下の概念を表現できるようにします。
+
+| Function          | Purpose              |
+| ----------------- | -------------------- |
+| detect            | Profileを適用できるHTMLか判定 |
+| selector          | CSS selectorによる要素選択  |
+| fallback selector | 第一候補が存在しない場合の代替      |
+| repeat            | 複数要素を順番に抽出           |
+| attribute         | HTML属性の取得            |
+| text              | textContentの取得       |
+| html              | innerHTML等の取得        |
+| constant          | 固定値の設定               |
+| map               | 属性値等の意味変換            |
+| exclude           | 不要DOMの除外             |
+
+必要になるまでは条件式、ループ、変数、独自式言語などを追加しません。
+
+## Custom hooks
+
+すべてのDOM構造を宣言的Profileだけで表現しようとはしません。
+
+サービス固有の特殊処理が必要な場合は、JavaScript hookへ処理を委譲できます。
+
+```text
+Profile
+   |
+   v
+Generic extractor
+   |
+   v
+Optional hook
+   |
+   v
+Semantic Document
+```
+
+例えば、
+
+```yaml
+hooks:
+  normalizeContent: chatgptNormalizeContent
+```
+
+のようにProfileからhookを指定できる構成を想定します。
+
+Profile schemaをJavaScriptの代替プログラミング言語へ発展させないことを優先します。
+
+## Markdown Renderer
+
+Markdown RendererはSemantic Documentおよび正規化されたHTMLをMarkdownへ変換します。
+
+例えば、
+
+```html
+<strong>text</strong>
+```
+
+を、
+
+```markdown
+**text**
+```
+
+へ変換します。
+
+主な対象は以下です。
+
+* headings
+* paragraphs
+* strong
+* emphasis
+* strike-through
+* links
+* unordered lists
+* ordered lists
+* nested lists
+* blockquotes
+* inline code
+* code blocks
+* tables
+* images
+
+サービス固有のHTML構造をMarkdown Rendererへ直接追加することは避けます。
+
+必要な場合はProfile側でSemantic HTMLへ正規化します。
+
+## Source detection
+
+入力HTMLに適用するProfileは自動判定できます。
+
+例えばChatGPT用Profileは、
+
+```text
+[data-testid^="conversation-turn-"]
+[data-message-author-role]
+```
+
+などの存在を検出条件として利用できます。
+
+UIでは、
+
+```text
+Mode: Auto
+Detected: ChatGPT Conversation
+```
+
+のように表示します。
+
+自動判定に失敗した場合に備え、ユーザーがProfileを手動選択できるようにします。
+
+```text
+Auto
+ChatGPT Conversation
+Generic HTML
+...
+```
+
+初期段階では複雑なスコアリングアルゴリズムは必要ありません。
+
+## Generic HTML Profile
+
+サービス固有Profileに該当しないHTML用としてGeneric HTML Profileを提供します。
+
+概念的には、
+
+```yaml
+id: generic-html
+name: Generic HTML
+
+content:
+  selectors:
+    - article
+    - main
+    - body
+
+exclude:
+  - script
+  - style
+  - nav
+```
+
+のような構成を想定します。
+
+Generic HTML Profileは会話のUser/Assistantなどを推測しません。
+
+HTMLに存在する一般的な文書構造だけをMarkdownへ変換します。
+
+## ChatGPT Profile
+
+ChatGPT Profileでは、ページ全体のHTMLから会話部分を抽出します。
+
+代表的に以下のような属性を利用できます。
+
+```text
+data-testid="conversation-turn-*"
+data-turn="user"
+data-turn="assistant"
+data-message-author-role
+data-message-id
+```
+
+ただし、これらはChatGPTの公開APIではありません。
+
+変更される可能性があるため、Profileおよびfixture testによって対応します。
+
+### DOM完全性
+
+`body` をコピーした場合でも、会話全体がHTMLに含まれるとは限りません。
+
+長い会話では過去ターンがブラウザDOMから削除されている可能性があります。
+
+ChatGPT Profileでは、可能であれば以下を検査します。
+
+```text
+detected turn count
+first detected turn
+last detected turn
+missing sequence
+```
+
+完全性を確実に判定できない場合はエラーではなくwarningとして扱います。
 
 ## ディレクトリ構成
 
@@ -116,36 +400,50 @@ ChatGPTなどから実際に取得したクリップボードHTMLをfixtureと�
 │   │
 │   ├── core/
 │   │   ├── convert.js
+│   │   ├── detect-source.js
+│   │   ├── extract.js
+│   │   ├── document-model.js
 │   │   ├── normalize.js
-│   │   └── html-to-markdown.js
+│   │   └── render-markdown.js
+│   │
+│   ├── profiles/
+│   │   ├── chatgpt.yaml
+│   │   └── generic-html.yaml
+│   │
+│   ├── hooks/
+│   │   └── chatgpt.js
 │   │
 │   └── browser/
-│       ├── clipboard.js
+│       ├── paste.js
 │       ├── ui.js
 │       └── app.js
 │
 ├── test/
 │   ├── unit/
-│   │   └── converter.test.js
+│   │   ├── profile-engine.test.js
+│   │   ├── source-detection.test.js
+│   │   └── markdown-renderer.test.js
 │   │
 │   ├── fixtures/
-│   │   ├── chatgpt-basic/
-│   │   │   ├── clipboard.html
-│   │   │   ├── clipboard.txt
-│   │   │   ├── metadata.json
-│   │   │   └── expected.md
+│   │   ├── chatgpt/
+│   │   │   ├── body-basic/
+│   │   │   │   ├── input.html
+│   │   │   │   ├── metadata.json
+│   │   │   │   └── expected.md
+│   │   │   │
+│   │   │   ├── body-partial/
+│   │   │   │   ├── input.html
+│   │   │   │   ├── metadata.json
+│   │   │   │   └── expected.md
+│   │   │   │
+│   │   │   ├── code-block/
+│   │   │   └── writing-block/
 │   │   │
-│   │   ├── chatgpt-code/
-│   │   │   ├── clipboard.html
-│   │   │   ├── clipboard.txt
-│   │   │   ├── metadata.json
-│   │   │   └── expected.md
-│   │   │
-│   │   └── generic-web/
-│   │       ├── clipboard.html
-│   │       ├── clipboard.txt
-│   │       ├── metadata.json
-│   │       └── expected.md
+│   │   └── generic-html/
+│   │       └── article-basic/
+│   │           ├── input.html
+│   │           ├── metadata.json
+│   │           └── expected.md
 │   │
 │   └── browser/
 │       └── app.spec.js
@@ -154,251 +452,242 @@ ChatGPTなどから実際に取得したクリップボードHTMLをfixtureと�
 │   └── build.mjs
 │
 └── dist/
-    └── richtext-to-markdown.html
+    └── rich-html-to-markdown.html
 ```
 
-必要になるまでディレクトリやモジュールを細分化しすぎないようにします。
+ProfileをJSONとして実装する場合は `.yaml` を `.json` に置き換えます。
 
 ## 各ディレクトリの責務
 
 ### `src/core/`
 
-ブラウザUIに依存しない変換処理を配置します。
+サービスに依存しない変換基盤を配置します。
 
-主な責務は以下です。
+主な責務:
 
-* HTML入力の正規化
-* HTMLからMarkdownへの変換
-* プレーンテキスト入力の処理
-* Markdown出力の正規化
+* HTML parsing
+* Profile detection
+* Profile execution
+* Semantic Document生成
+* HTML normalization
+* Markdown rendering
 
-このディレクトリ内のコードはNode.js上の自動テストから直接実行できる状態を維持します。
+### `src/profiles/`
+
+サービス固有のExtraction Profileを配置します。
+
+Profileは可能な限り宣言的に記述します。
+
+### `src/hooks/`
+
+宣言的Profileだけでは処理できないサービス固有処理を配置します。
+
+Profile schemaに複雑なプログラミング機能を追加する前にhookの利用を検討します。
 
 ### `src/browser/`
 
-ブラウザ固有の処理を配置します。
+ブラウザUIとブラウザ固有APIを扱います。
 
-主な責務は以下です。
+主な責務:
 
-* `paste` イベントの受信
-* `ClipboardEvent.clipboardData` の取得
-* `text/html` と `text/plain` の取得
-* 入力プレビュー
+* paste event
+* `text/html` の取得
+* HTML sourceの貼り付け
+* Profile選択UI
+* Auto detection結果の表示
 * Convertボタン
-* 出力textarea
-* Markdownのコピー
+* warning表示
+* Markdown出力
+* Markdownコピー
 
 変換規則そのものはここへ実装しません。
 
-### `test/fixtures/`
+## Fixture
 
-実際のコピー元から取得した入力データと、その期待結果を保存します。
+実際のWebサービスから取得したHTMLをfixtureとして保存します。
 
-1つのfixtureは基本的に以下の構成とします。
+基本構成:
 
 ```text
 fixture-name/
-├── clipboard.html
-├── clipboard.txt
+├── input.html
 ├── metadata.json
 └── expected.md
 ```
 
-`clipboard.html` はクリップボードの `text/html` を保存したものです。
+`input.html` は可能な限り実際に取得したHTMLを保存します。
 
-`clipboard.txt` は同時に取得した `text/plain` を保存します。
+`metadata.json` には取得元を記録します。
 
-`expected.md` は期待するMarkdown出力です。
-
-`metadata.json` にはfixtureの出所を記録します。
-
-例えば以下の情報を保持できます。
+例:
 
 ```json
 {
   "source": "chatgpt",
+  "captureMethod": "devtools-copy-element",
+  "element": "body",
   "browser": "chrome",
   "captured": "2026-09-06",
-  "description": "Answer containing headings and a code block"
+  "description": "ChatGPT conversation DOM"
 }
 ```
 
 fixtureに個人情報、認証情報、機密情報を含めてはいけません。
 
-必要に応じて匿名化してからリポジトリへ追加します。
+実データを利用する場合はリポジトリへ追加する前に匿名化します。
 
-## 入力モデル
+## Fixtureの更新方針
 
-ブラウザ固有のClipboardEventをcoreへ直接渡さないようにします。
+WebサービスのDOM変更が発生した場合、古いfixtureを上書きすることを基本としません。
 
-ブラウザ層で共通入力形式へ変換します。
-
-概念的な入力形式は以下です。
+例えば、
 
 ```text
-ClipboardInput
-{
-    html: string,
-    text: string,
-    types: string[]
-}
+chatgpt/body-2026-09/
+chatgpt/body-2027-01/
 ```
 
-変換処理の外部インターフェースは、概念的には以下とします。
+のように新しいfixtureを追加します。
+
+これにより、
 
 ```text
-ClipboardInput
-      |
-      v
-convert
-      |
-      v
-Markdown string
+現在のDOM
+過去のDOM
 ```
 
-具体的な関数分割やHTML変換アルゴリズムは実装時に決定します。
+の両方を継続的にテストできます。
 
-## 変換時の優先順位
-
-基本的な入力選択ルールは以下です。
-
-```text
-text/html available
-        |
-       yes
-        |
-        v
-HTML -> Markdown
-```
-
-HTMLが存在しない場合は、
-
-```text
-text/plain
-    |
-    v
-Plain text / Markdown fallback
-```
-
-を使用します。
-
-コピー元の形式ごとの特殊処理を追加する場合でも、可能な限り共通変換処理と分離します。
+Profileを更新した結果、過去形式への対応が壊れていないことも確認できます。
 
 ## テスト方針
 
-テストは主に3層に分けます。
+テストは主に4層に分けます。
 
 ### Unit tests
 
-HTML要素や正規化ルール単位のテストです。
+小さな変換規則やProfile engineを検証します。
 
-対象例:
+主な対象:
 
-* headings
-* paragraphs
-* strong
-* emphasis
-* strike-through
-* links
-* unordered lists
-* ordered lists
-* nested lists
-* blockquotes
-* inline code
-* code blocks
-* tables
-* whitespace normalization
-
-高速に実行できるテストを中心とします。
+```text
+profile detection
+CSS selector extraction
+attribute mapping
+fallback selector
+exclude
+Semantic Document generation
+HTML normalization
+Markdown rendering
+```
 
 ### Fixture / Golden tests
 
-実際に取得したクリップボードデータを変換し、`expected.md` と完全一致することを確認します。
+実際のHTMLを変換し、期待するMarkdownと完全一致することを確認します。
 
 ```text
-clipboard.html
-      |
-      v
- converter
-      |
-      v
- actual Markdown
-      |
-      v
- compare
-      |
-      v
- expected.md
+input.html
+    |
+    v
+Profile
+    |
+    v
+Semantic Document
+    |
+    v
+Markdown Renderer
+    |
+    v
+actual.md
+    |
+    v
+compare
+    |
+    v
+expected.md
 ```
 
-ChatGPT側のHTML形式などが変化した場合は、新しい入力を既存fixtureへ上書きせず、新しいfixtureとして追加することを基本とします。
+本プロジェクトではfixture testを主要なregression testとして扱います。
 
-これにより、過去に対応していた入力形式を継続してテストできます。
+### Profile detection tests
+
+同じ入力に複数Profileが誤って適用されないことを確認します。
+
+例えば、
+
+```text
+ChatGPT HTML
+→ ChatGPT profile
+
+Generic article
+→ Generic HTML profile
+```
+
+を検証します。
 
 ### Browser integration tests
 
-生成されたアプリケーションを実際のブラウザで開き、UIとして動作することを確認します。
+最終的な単一HTMLを実ブラウザで開いて確認します。
 
-主な確認対象は以下です。
+主な対象:
 
-* HTMLが正常に起動する
-* 入力データを受け取れる
-* Convertボタンが動作する
-* Markdownが出力欄へ表示される
-* 出力をコピーできる
-* 外部リソースなしで起動する
+* HTMLが直接開ける
+* HTMLを貼り付けられる
+* Clipboard `text/html` を取得できる
+* Profileが自動判定される
+* Profileを手動変更できる
+* Convertが動作する
+* warningが表示される
+* Markdownをコピーできる
+* 外部リソースなしで動作する
 
-OSの実クリップボード操作はブラウザ権限やCI環境の影響を受けやすいため、自動テストの中心には置きません。
+OSの実クリップボードはCI環境依存性が高いため、主要な変換テストには使用しません。
 
-ClipboardEventから内部入力モデルへの変換は、テスト用データを注入して検証します。
+## DOM completeness test
 
-実際の `Ctrl+V` 操作については必要に応じて手動smoke testを実施します。
+ChatGPTなどDOM virtualisationが存在するサービスについては、不完全なDOMもfixtureとして保持します。
 
-## ビルド
-
-開発中のファイルは分割されていますが、最終成果物は以下の1ファイルです。
-
-```text
-dist/richtext-to-markdown.html
-```
-
-ビルド処理は概ね次の順序で行います。
+例えば、
 
 ```text
-src/browser/app.js
-        |
-        | esbuild
-        v
-bundled JavaScript
-        |
-        +------------------+
-                           |
-src/style.css              |
-        |                  |
-        +---------+        |
-                  |        |
-src/index.template.html    |
-        |         |        |
-        +---------+--------+
-                  |
-                  | scripts/build.mjs
-                  v
-dist/richtext-to-markdown.html
+chatgpt/body-partial/
 ```
 
-最終HTMLにはJavaScriptとCSSをインライン化します。
+では会話途中からしか存在しないHTMLを入力し、適切なwarningが生成されることを確認します。
 
-配布版では外部ファイルへの依存を持たせません。
+完全性の検査はProfile固有処理とし、Markdown Rendererには持ち込みません。
+
+## 想定開発環境
+
+基本構成:
+
+* Node.js 20以降
+* npm
+* esbuild
+* Vitest
+* Playwright
+
+役割:
+
+| Tool       | Purpose                   |
+| ---------- | ------------------------- |
+| Node.js    | 開発・ビルド環境                  |
+| npm        | パッケージ管理                   |
+| esbuild    | JavaScript bundling       |
+| Vitest     | Unit / fixture tests      |
+| Playwright | Browser integration tests |
+
+Extraction ProfileにYAMLを使用する場合は、ビルド時にJavaScriptまたはJSONとしてbundleへ埋め込みます。
+
+実行時に外部Profileファイルを必要としないようにします。
 
 ## セットアップ
-
-リポジトリを取得後、依存パッケージをインストールします。
 
 ```bash
 npm ci
 ```
 
-開発環境で最初にPlaywrightのブラウザが必要な場合は、追加でインストールします。
+Playwrightのブラウザが必要な場合:
 
 ```bash
 npx playwright install
@@ -410,7 +699,7 @@ npx playwright install
 npm test
 ```
 
-Vitestを使用してUnit testとfixture testを実行します。
+Unit test、Profile test、fixture testを実行します。
 
 ## ビルド
 
@@ -418,36 +707,35 @@ Vitestを使用してUnit testとfixture testを実行します。
 npm run build
 ```
 
-成功すると以下が生成されます。
+ビルド成功後、
 
 ```text
-dist/richtext-to-markdown.html
+dist/rich-html-to-markdown.html
 ```
 
-## Browser tests
+を生成します。
 
-ビルド後に実行します。
+## Browser tests
 
 ```bash
 npm run test:e2e
 ```
 
-Playwrightで生成済みHTMLのブラウザ動作を確認します。
-
-利用者がローカルHTMLとして使用することを考慮し、少なくとも最終的な成果物が外部Webサーバーに依存せず動作することを確認します。
+生成済み単一HTMLをPlaywrightで検証します。
 
 ## 一括チェック
-
-CIおよびリリース前には以下を一括実行できるようにします。
 
 ```bash
 npm run check
 ```
 
-想定する処理順序は以下です。
+概念的には以下を実行します。
 
 ```text
 Unit tests
+    |
+    v
+Profile tests
     |
     v
 Fixture tests
@@ -459,9 +747,60 @@ Build
 Browser tests
 ```
 
+## ビルド処理
+
+開発中はHTML、CSS、JavaScript、Profileを分離します。
+
+```text
+JavaScript modules
+        |
+        | esbuild
+        v
+ bundled JavaScript
+        |
+        +-------------------+
+                            |
+Profiles                    |
+        |                   |
+        | embed             |
+        +-------------------+
+                            |
+CSS                         |
+        |                   |
+        +----------+        |
+                   |        |
+index.template.html         |
+        |          |        |
+        +----------+--------+
+                   |
+                   | build.mjs
+                   v
+dist/rich-html-to-markdown.html
+```
+
+最終HTMLには、
+
+* JavaScript
+* CSS
+* Extraction Profiles
+
+をすべて埋め込みます。
+
+## 配布成果物の制約
+
+`dist/rich-html-to-markdown.html` は単独で動作しなければなりません。
+
+少なくとも以下を自動検証します。
+
+* 外部JavaScriptなし
+* 外部CSSなし
+* 外部Profileファイルなし
+* 変換処理にネットワーク通信不要
+* ローカルHTMLとして直接起動可能
+
 ## package.json scripts
 
-少なくとも以下のnpm scriptを提供します。
+少なくとも以下を提供します。
 
 ```text
 npm test
@@ -470,94 +809,116 @@ npm run test:e2e
 npm run check
 ```
 
-具体的なコマンドラインや追加オプションは実装時に決定します。
-
-## ビルド成果物の検証
-
-単一HTMLという配布要件を自動的に検証します。
-
-少なくとも以下を確認します。
-
-* JavaScriptがHTML内に含まれている
-* CSSがHTML内に含まれている
-* 外部JavaScriptを必要としない
-* 外部stylesheetを必要としない
-* 変換処理にネットワークアクセスを必要としない
-* `dist/richtext-to-markdown.html` 単独で起動できる
-
-必要に応じて、生成HTMLに外部参照が含まれていないこともCIで検査します。
+実際のコマンドラインオプションは実装時に決定します。
 
 ## `dist/` の扱い
 
-`dist/richtext-to-markdown.html` は単なる一時ファイルではなく、本プロジェクトの主要な配布成果物です。
+単一HTMLは本プロジェクトの主要な配布成果物です。
 
-そのため、以下のどちらかの運用を選択します。
-
-1. Gitには含めず、ReleaseやCI Artifactとして生成する
-2. Gitにも含め、リポジトリから直接HTMLを取得できるようにする
-
-Gitへ含める場合は、CIで再ビルドした成果物とコミット済みの `dist/richtext-to-markdown.html` が一致することを確認し、生成物の更新忘れを防ぎます。
-
-初期段階では、配布の容易さを優先してGitへ含めても構いません。
-
-## fixture追加手順
-
-新しい入力形式への対応や不具合修正時は、可能な限り再現用fixtureを追加します。
-
-例えばChatGPTの表変換に問題が見つかった場合、
+以下のどちらかを選択します。
 
 ```text
-test/fixtures/chatgpt-table/
+Git管理しない
+→ CI / Releaseで生成
 ```
 
-を作成し、
+または、
 
 ```text
-clipboard.html
-clipboard.txt
-metadata.json
-expected.md
+Git管理する
+→ リポジトリから直接取得可能
 ```
 
-を追加します。
+Git管理する場合は、CI上で再ビルドしたHTMLとコミット済みHTMLが一致することを確認します。
 
-その後に変換処理を修正します。
+初期段階では配布の容易さを優先し、Gitへ含めても構いません。
 
-これにより同じ問題の再発を自動検出できます。
+## 新しいサービスへの対応
 
-## 対応ブラウザ
+新しいサービスへ対応する場合は、原則として次の順序で進めます。
 
-初期段階ではChromium系ブラウザを主要な開発・テスト対象として構いません。
+1. 実HTMLを取得する
+2. 匿名化したfixtureを追加する
+3. Semantic Documentとして何を抽出するか決める
+4. Extraction Profileを追加する
+5. 宣言的Profileで不足する場合のみhookを追加する
+6. `expected.md` を定義する
+7. Auto detection testを追加する
 
-ただし、ClipboardEventなど標準Web APIを使用し、可能な限り特定ブラウザ固有APIへ依存しない設計とします。
+Markdown Rendererをサービス固有に変更することは原則避けます。
 
-FirefoxやSafariを正式に対象とする場合は、Playwrightの対象ブラウザとfixtureの取得環境を追加します。
+## Profile schemaの発展方針
 
-## セキュリティとプライバシー
+Profileは意図的に小さく保ちます。
 
-このツールは、ユーザーが貼り付ける会話や文書を扱います。
+次のような要求が出た場合でも、
 
-そのため、以下を原則とします。
+```text
+if
+else
+loop
+variable
+function
+expression language
+```
 
-* 入力内容を外部サーバーへ送信しない
-* Analyticsを組み込まない
-* 外部CDNを利用しない
-* 外部JavaScriptを読み込まない
-* fixtureへ実ユーザーの機密情報を保存しない
-* HTML入力をUIへ再描画する場合は、任意スクリプトを実行しないよう注意する
+をすぐProfile schemaへ追加しないでください。
 
-特にクリップボード由来のHTMLは信頼できない入力として扱います。
+まず、
+
+```text
+既存の宣言機能で表現可能か
+hookへ分離できないか
+複数サービスで共通して必要な機能か
+```
+
+を確認します。
+
+複数の実Profileで同じ要求が繰り返し発生した場合にのみ、Profile schemaの標準機能として追加します。
+
+この方針により、独自DSLがJavaScriptの不完全な再実装になることを防ぎます。
 
 ## 将来的な拡張
 
-現在の主要な出力はMarkdownですが、coreとbrowserを分離することで、将来的に以下を追加できる構成とします。
+ExtractionとRenderingを分離しているため、入力サービスと出力形式を独立して拡張できます。
 
-* CLI
-* HTMLファイル入力
-* JSON形式の会話保存
-* Markdown + JSON bundle
-* 複数サービス固有のnormalizer
-* 画像・添付ファイルの保存
-* 他形式への変換
+入力側:
 
-これらの拡張によって、単一HTML版の基本的な利用方法を壊さないことを原則とします。
+```text
+ChatGPT
+Claude
+Gemini
+GitHub
+Web article
+...
+```
+
+出力側:
+
+```text
+Markdown
+JSON
+HTML
+...
+```
+
+概念的には、
+
+```text
+             Source HTML
+                  |
+                  v
+        Extraction Profiles
+                  |
+                  v
+         Semantic Document
+                  |
+          +-------+-------+
+          |       |       |
+          v       v       v
+      Markdown   JSON    HTML
+```
+
+という構造へ拡張できます。
+
+初期実装ではMarkdownのみを正式な出力対象とします。
