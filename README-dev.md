@@ -6,7 +6,7 @@
 
 ## 仕様の状態
 
-現在は実装前です。以下は初期実装のための暫定仕様であり、実装・テスト済みであることを意味しません。仕様変更時は両READMEと対応するfixtureの期待値を同じ変更で更新します。新しいDOMへの対応は実HTMLで検証し、この文書の属性例を現行サービスの保証とは扱いません。
+初期実装として、以下の変換基盤・Profile・ブラウザUI・ビルド・自動テストを追加しています。現在のfixtureは仕様から手作成した合成データであり、実サービスから取得したHTMLではありません。実DOMとの互換性とリリース対象ブラウザの実クリップボード操作は未確認です。検証状況は [docs/validation.md](docs/validation.md) に記録します。仕様変更時は両READMEと対応するfixtureの期待値を同じ変更で更新します。新しいDOMへの対応は実HTMLで検証し、この文書の属性例を現行サービスの保証とは扱いません。
 
 初期実装の範囲はAuto、ChatGPT Conversation、Generic HTMLとMarkdown出力です。出力書式の設定、外部Profileの実行時読み込み、履歴の永続保存、ファイルのダウンロード機能は含めません。
 
@@ -102,6 +102,8 @@ coreは空白のみの入力を `EMPTY_INPUT` として拒否します。文書�
 ### 解析・表示時の安全性
 
 入力は、外部リソースを取得せずコードを実行しない隔離された解析環境でDOM化します。この性質をブラウザテストで確認できるparserを採用します。入力DOMを稼働中のページへ挿入しません。入力・出力の表示には `textarea.value` または `textContent` を使用し、HTMLプレビューは提供しません。
+
+実装では [parse5](https://parse5.js.org/) でHTMLの構文を補正し、[LinkeDOM](https://github.com/WebReflection/linkedom) の `linkedom/worker` で検索・複製用のDOMを構築します。解析・正規化・Rendererは同じ実装をNode.jsとブラウザで使用し、ブラウザのネイティブDOMParserは使用しません。CSPを持たないページでもparserによる通信・入力コードの実行が発生しないことをブラウザテストで確認します。
 
 解析後、検出前に `script`、`style`、`link`、`base`、`meta`、`iframe`、`object`、`embed`、`template`、`svg` を子孫ごと除去し、イベント属性と `style` 属性を除去します。`hidden` または `aria-hidden="true"` の要素も子孫ごと除去します。外部CSSや計算済みスタイルによる可視性判定はしません。検出に必要な `data-*`、`class`、`role` は残します。hook後にも同じ除去を行います。
 
@@ -866,7 +868,7 @@ chatgpt/body-partial/
 
 基本構成:
 
-* Node.js 20以降
+* Node.js 20.19以降（22系は22.12以降。CIは22系）
 * npm
 * esbuild
 * Vitest
@@ -895,7 +897,7 @@ npm ci
 Playwrightのブラウザが必要な場合:
 
 ```bash
-npx playwright install
+npx playwright install chromium
 ```
 
 ## Unit / fixture tests
@@ -927,6 +929,8 @@ npm run test:e2e
 ```
 
 生成済み単一HTMLをPlaywrightで検証します。
+
+Linuxでブラウザのシステム依存ライブラリも必要な場合は `npx playwright install --with-deps chromium` を使用します。`npm run test:e2e` の前に `npm run build` を実行してください。`npm run check` はビルドも含めて順番に実行します。
 
 ## 一括チェック
 
@@ -1021,6 +1025,8 @@ npm run check
 単一HTMLは本プロジェクトの主要な配布成果物です。
 
 Git管理せず、CI / Releaseで生成します。
+
+現在のGitHub Actionsは `npm run check` の成功後、単一HTMLをartifactとして保存します。Releaseへの公開はまだ自動化していません。配布HTMLにはランタイム依存ライブラリのライセンスを `THIRD-PARTY-NOTICES.txt` から埋め込みます。依存関係を更新する際はこのファイルも確認してください。
 
 ## 新しいサービスへの対応
 

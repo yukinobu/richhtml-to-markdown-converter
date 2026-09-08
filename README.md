@@ -4,7 +4,18 @@
 
 最初の主要な対象としてChatGPTの会話を想定していますが、特定のWebサービスだけに依存せず、変換モードを追加することで他のWebサービスや一般的なHTMLへ拡張できる設計を目指します。
 
-現在は実装前の設計段階です。この文書の動作は初期実装に向けた暫定仕様であり、実装済みの機能を示すものではありません。実HTMLのfixtureによる検証を通じて見直します。詳細な規則は [README-dev.md](README-dev.md) に記載します。
+初期実装としてAuto、ChatGPT Conversation、Generic HTMLの変換と単一HTMLへのビルドを提供しています。仕様に基づく合成fixtureとChromiumのブラウザテストで検証しています。実際のChatGPTから取得したHTML、デスクトップChrome・Edgeの実クリップボードによる確認は未実施です。サービス固有の抽出規則は暫定仕様として、実HTMLのfixtureによる検証を通じて見直します。詳細な規則は [README-dev.md](README-dev.md) に記載します。
+
+## 起動方法
+
+開発環境で以下を実行すると、配布用HTMLを生成できます（Node.js 20.19以降、22系は22.12以降）。
+
+```bash
+npm ci
+npm run build
+```
+
+生成された `dist/rich-html-to-markdown.html` をブラウザで直接開いてください。このHTML単体の利用にはNode.jsやWebサーバーは必要ありません。入力方式「HTMLソース」を選ぶと、例えば `<h1>見出し</h1><p>本文</p>` を入力してConvertで変換できます。
 
 ## 特徴
 
