@@ -1111,3 +1111,5 @@ HTML
 という構造へ拡張できます。
 
 本バージョンではMarkdownのみを出力対象とします。
+
+<!-- markdownlint-disable-file MD038 -->
