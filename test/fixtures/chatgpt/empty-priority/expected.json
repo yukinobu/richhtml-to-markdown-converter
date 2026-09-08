@@ -1,0 +1,17 @@
+{
+  "mode": "auto",
+  "ok": false,
+  "profileId": "chatgpt-conversation",
+  "warnings": [
+    {
+      "code": "COMPLETENESS_UNVERIFIED"
+    },
+    {
+      "code": "EMPTY_MESSAGE",
+      "itemIndex": 0
+    }
+  ],
+  "error": {
+    "code": "NO_CONTENT"
+  }
+}

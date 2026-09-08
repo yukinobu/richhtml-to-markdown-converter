@@ -1,0 +1,38 @@
+id: chatgpt-conversation
+name: ChatGPT Conversation
+documentType: conversation
+detect:
+  any:
+    - '[data-testid^="conversation-turn-"]'
+    - '[data-message-author-role="user"]'
+    - '[data-message-author-role="assistant"]'
+items:
+  selectors:
+    - '[data-testid^="conversation-turn-"]'
+    - '[data-message-author-role="user"], [data-message-author-role="assistant"]'
+  type: message
+  role:
+    attribute: data-turn
+    map:
+      user: user
+      assistant: assistant
+  content:
+    selectors:
+      user:
+        - '[data-message-author-role="user"]'
+        - ':scope'
+      assistant:
+        - '[data-message-author-role="assistant"] .markdown'
+        - '[data-message-author-role="assistant"]'
+        - ':scope'
+      unknown:
+        - '[data-message-author-role]'
+        - ':scope'
+  exclude:
+    - button
+    - nav
+    - '[role="toolbar"]'
+hooks:
+  resolveRole: chatgptResolveRole
+  normalizeContent: chatgptNormalizeContent
+  inspectDocument: chatgptInspectDocument

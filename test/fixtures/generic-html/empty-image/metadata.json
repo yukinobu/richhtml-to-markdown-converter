@@ -1,0 +1,8 @@
+{
+  "source": "generic-html",
+  "captureMethod": "synthetic",
+  "element": "fixture",
+  "browser": null,
+  "captured": null,
+  "description": "README-dev.mdの暫定仕様から手作成した合成fixture。実サービスのDOMを取得したものではない。"
+}

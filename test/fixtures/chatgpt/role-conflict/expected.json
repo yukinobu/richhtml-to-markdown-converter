@@ -1,0 +1,18 @@
+{
+  "mode": "auto",
+  "ok": true,
+  "profileId": "chatgpt-conversation",
+  "warnings": [
+    {
+      "code": "COMPLETENESS_UNVERIFIED"
+    },
+    {
+      "code": "CONTENT_FALLBACK",
+      "itemIndex": 0
+    },
+    {
+      "code": "ROLE_CONFLICT",
+      "itemIndex": 0
+    }
+  ]
+}
