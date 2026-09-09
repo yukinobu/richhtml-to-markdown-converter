@@ -1,0 +1,10 @@
+{
+  "source": "chatgpt",
+  "captureMethod": "devtools-copy-element",
+  "element": "section (excerpt)",
+  "browser": null,
+  "captured": "2026-09-09",
+  "captureDateSource": "provided-filename",
+  "description": "実DOMの折りたたまれたユーザー投稿を抜粋。展開ボタンを除去し、DOM内にある全文と改行を保持する。空白は共通Rendererの規則に従う。",
+  "sanitization": "提供された実DOMから対象部分を抜粋。本文・コード・リンク先をテスト用データへ置換し、メッセージID・会話ID・個人情報を除去。ブラウザ種別は未確認。"
+}

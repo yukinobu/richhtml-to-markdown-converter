@@ -4,7 +4,7 @@
 
 最初の主要な対象としてChatGPTの会話を想定していますが、特定のWebサービスだけに依存せず、変換モードを追加することで他のWebサービスや一般的なHTMLへ拡張できる設計を目指します。
 
-初期実装としてAuto、ChatGPT Conversation、Generic HTMLの変換と単一HTMLへのビルドを提供しています。仕様に基づく合成fixtureとChromiumのブラウザテストで検証しています。実際のChatGPTから取得したHTML、デスクトップChrome・Edgeの実クリップボードによる確認は未実施です。サービス固有の抽出規則は暫定仕様として、実HTMLのfixtureによる検証を通じて見直します。詳細な規則は [README-dev.md](README-dev.md) に記載します。
+初期実装としてAuto、ChatGPT Conversation、Generic HTMLの変換と単一HTMLへのビルドを提供しています。仕様に基づく合成fixtureに加え、2026年9月9日付のChatGPT実DOMから匿名化・抜粋したfixtureとChromiumのブラウザテストで検証しています。デスクトップChrome・Edgeの実クリップボードによる確認は未実施です。サービス固有の抽出規則は暫定仕様として、実HTMLのfixtureによる検証を通じて見直します。詳細な規則は [README-dev.md](README-dev.md) に記載します。
 
 ## 起動方法
 
@@ -223,6 +223,8 @@ conversation
 ```
 
 という構造を抽出します。
+
+2026年9月の実DOMで確認したコードビューアでは、言語ラベルと操作UIをコード本文から分離し、言語名をコードフェンスへ付けます。ユーザー投稿の既知の本文要素では改行を保持しますが、ログなどを自動でコードブロックに変換することはありません。出典リンク内の装飾用アイコンは除き、リンク自体と通常の本文画像は保持します。
 
 ### Generic HTML
 

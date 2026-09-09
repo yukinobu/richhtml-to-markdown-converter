@@ -6,7 +6,7 @@
 
 ## 仕様の状態
 
-初期実装として、以下の変換基盤・Profile・ブラウザUI・ビルド・自動テストを追加しています。現在のfixtureは仕様から手作成した合成データであり、実サービスから取得したHTMLではありません。実DOMとの互換性とリリース対象ブラウザの実クリップボード操作は未確認です。検証状況は [docs/validation.md](docs/validation.md) に記録します。仕様変更時は両READMEと対応するfixtureの期待値を同じ変更で更新します。新しいDOMへの対応は実HTMLで検証し、この文書の属性例を現行サービスの保証とは扱いません。
+初期実装として、以下の変換基盤・Profile・ブラウザUI・ビルド・自動テストを追加しています。仕様から手作成した合成fixtureに加え、2026年9月9日付のChatGPT実DOMから匿名化・抜粋したfixtureで、コードビューア、ユーザー投稿の改行、出典リンクを検証しています。リリース対象ブラウザの実クリップボード操作は未確認です。検証状況は [docs/validation.md](docs/validation.md) に記録します。仕様変更時は両READMEと対応するfixtureの期待値を同じ変更で更新します。新しいDOMへの対応は実HTMLで検証し、この文書の属性例を現行サービスの保証とは扱いません。
 
 初期実装の範囲はAuto、ChatGPT Conversation、Generic HTMLとMarkdown出力です。出力書式の設定、外部Profileの実行時読み込み、履歴の永続保存、ファイルのダウンロード機能は含めません。
 
@@ -266,6 +266,7 @@ items:
     - button
     - nav
     - '[role="toolbar"]'
+    - '[data-testid="webpage-citation-pill"] img[alt=""]'
 
 hooks:
   resolveRole: chatgptResolveRole
@@ -506,7 +507,16 @@ data-message-id
 2. `chatgptResolveRole` は有効な `data-turn` を優先し、なければitem自身と子孫の有効な `data-message-author-role` が1種類だけの場合に採用します。有効値は `user` / `assistant` のみです。両属性の有効値が矛盾すれば `ROLE_CONFLICT`、roleを確定できなければ `UNKNOWN_ROLE` を出します。矛盾時は有効な `data-turn`、確定不能時は `unknown` を使用します。
 3. role別の本文候補を順に評価します。Assistantの `.markdown` が複数あればすべてDOM順で結合します。同一itemの複数著者要素も同様です。異なる応答候補を推測して1つに絞る処理は行いません。
 4. `:scope` までfallbackした場合は `CONTENT_FALLBACK` を出し、item内の既知UIを除いた内容を保持します。最初の候補が存在して空だった場合はfallbackせず、最終的な空本文判定に従います。
-5. `chatgptNormalizeContent` の初期動作は、抽出・除外済み断片をそのまま返すものとします。CSSクラスから改行や見た目を推測しません。コードのラベルや特殊UIの正規化は、実fixtureで期待結果を確定してから追加します。
+5. `chatgptNormalizeContent` は抽出・除外済み断片に、次節の実DOMで検証した正規化を適用します。未確認のクラスや見た目から本文構造を推測しません。
+
+### 2026年9月の実DOMに対する正規化
+
+以下は `code-viewer-2026-09`、`user-lines-2026-09`、`citation-2026-09` のfixtureで固定しています。サービス固有の処理はProfileとhookに置き、共通Rendererの書式規則は変更しません。
+
+* コードビューア: 最外側の `pre` 内に `[id="code-block-viewer"]` が1件、その中に `pre.cm-content` が1件、さらに直下の `code` が1件ある場合、外側のUIを内側の `pre` に置き換えます。これによりコード本文の空白・改行を保持し、言語ラベルの本文への混入を防ぎます。ビューアが複数あるなど判定が曖昧な場合は元の構造を保持します。
+* コード言語: 内側の `code`、内側の `pre`、外側の `pre` の順で有効な `language-*` クラスを優先します。なければ、外側の `.select-none.sticky .font-medium` にあるラベルが `[A-Za-z0-9_+-]+` に完全一致する場合のみ、小文字化して `language-*` クラスに移します。ラベルがない場合や形式が不正な場合は言語を付けません。
+* ユーザー投稿: 解決済みroleが `user` の場合だけ、本文の `.whitespace-pre-wrap` 内のテキスト改行を `br` に変換します。連続改行も保持し、`pre` / `code` 内には適用しません。Markdown上ではバックスラッシュとLFのhard breakになります。通常の空白の圧縮・句読点のescapeは共通規則に従い、見出しやコードを推測しません。折りたたみ状態でもDOM内の全文を対象にします。
+* 出典アイコン: `[data-testid="webpage-citation-pill"]` 内にある `img[alt=""]` をProfileの `exclude` で除去します。出典のラベルとリンク先は保持し、代替テキストを持つ画像と出典チップ外の本文画像は除去しません。
 
 再生成候補や非表示要素を含む入力についても、共通の `hidden` / `aria-hidden` 除去と上記規則だけを適用します。サービスの内部状態を推測しません。
 
@@ -703,6 +713,8 @@ fixture-name/
 fixtureに個人情報、認証情報、機密情報を含めてはいけません。
 
 実データを利用する場合はリポジトリへ追加する前に匿名化します。
+
+2026年9月に追加した実DOM由来のfixtureは、提供されたHTMLから構造を抜粋し、本文・コード・URLをテスト用データへ置換しています。`metadata.json` の `sanitization` に加工内容を記録し、確認できないブラウザ種別は `null` としています。元データと全文の変換結果を置く `tmp/` はGit管理対象外です。
 
 `expected.json` は実行オプションと機械判定可能な期待結果を保持します。初期形式は以下とし、`mode`、`ok`、`profileId`、`warnings` は必須です。成功時は `error` を省略し、失敗時は `error` を必須とします。`profileId` は採用前の失敗では `null` です。診断には `code` と必要な `itemIndex` だけを記録し、表示文言は比較しません。
 

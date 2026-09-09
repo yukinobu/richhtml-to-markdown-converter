@@ -32,6 +32,7 @@ items:
     - button
     - nav
     - '[role="toolbar"]'
+    - '[data-testid="webpage-citation-pill"] img[alt=""]'
 hooks:
   resolveRole: chatgptResolveRole
   normalizeContent: chatgptNormalizeContent
