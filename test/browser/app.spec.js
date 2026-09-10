@@ -177,7 +177,7 @@ test('converts captured ChatGPT structures through the standalone HTML without r
   const requests = [];
   page.on('request', request => requests.push(request.url()));
   await page.locator('#input-method').selectOption('source');
-  for (const fixture of ['code-viewer-2026-09', 'user-lines-2026-09', 'citation-2026-09']) {
+  for (const fixture of ['code-viewer-2026-09', 'user-lines-2026-09', 'citation-2026-09', 'readable-output-2026-09']) {
     const path = `test/fixtures/chatgpt/${fixture}`;
     await paste(page, { 'text/plain': readFileSync(`${path}/input.html`, 'utf8') });
     await page.locator('#convert').click();

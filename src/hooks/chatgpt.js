@@ -57,10 +57,49 @@ function preserveUserLineBreaks(root) {
   }
 }
 
+function normalizeSearchPills(root) {
+  for (const pill of root.querySelectorAll('[data-inline-selection-pill][data-id="search"][data-keyword]')) {
+    if (pill.closest('pre, code')) continue;
+    const label = pill.getAttribute('data-keyword').trim();
+    if (label) pill.replaceWith(root.ownerDocument.createTextNode(`〔${label}〕`));
+  }
+}
+
+function normalizeLiteralStrong(root) {
+  root.normalize();
+  const visit = node => {
+    if (node.nodeType === 1 && ['pre', 'code', 'strong', 'b'].includes(node.localName)) return;
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType !== 3) { visit(child); continue; }
+      // Only paired, nonempty ** delimiters in one text node. Do not infer
+      // other Markdown, cross element boundaries, or reinterpret escaped runs.
+      const text = child.textContent;
+      const matches = [...text.matchAll(/(?<![\\*])\*\*(?![\s*])((?:(?!\*\*)[^\r\n])*?\S)(?<![\\*])\*\*(?!\*)/g)];
+      if (!matches.length) continue;
+      const nodes = [];
+      let end = 0;
+      for (const match of matches) {
+        nodes.push(root.ownerDocument.createTextNode(text.slice(end, match.index)));
+        const strong = root.ownerDocument.createElement('strong');
+        strong.textContent = match[1];
+        nodes.push(strong);
+        end = match.index + match[0].length;
+      }
+      nodes.push(root.ownerDocument.createTextNode(text.slice(end)));
+      child.replaceWith(...nodes);
+    }
+  };
+  visit(root);
+}
+
 export function chatgptNormalizeContent(html, { role } = {}) {
   const root = fragmentRoot(html);
   normalizeCodeViewers(root);
-  if (role === 'user') preserveUserLineBreaks(root);
+  if (role === 'user') {
+    normalizeSearchPills(root);
+    preserveUserLineBreaks(root);
+  }
+  if (role === 'assistant') normalizeLiteralStrong(root);
   return { html: root.innerHTML, warnings: [] };
 }
 
