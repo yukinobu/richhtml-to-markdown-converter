@@ -91,7 +91,7 @@ function renderTable(node, context) {
   const rows = tableRows(node);
   if (!rows.flat().length) return '';
   const caption = [...node.children].find(child => tag(child) === 'caption');
-  if (isComplexTable(node)) {
+  if (isComplexTable(rows)) {
     return [caption ? escapeBlockStart(escapeText(flatCellText(caption))) : '', ...rows.map(row => escapeBlockStart(row.map(cell => escapeText(flatCellText(cell))).join(' / ')))].filter(Boolean).join('\n\n');
   }
   const rendered = rows.map(row => row.map(cell => {

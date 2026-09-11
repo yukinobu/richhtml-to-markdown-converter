@@ -25,8 +25,7 @@ export function tableRows(table) {
     .map(row => [...row.children].filter(cell => ['th', 'td'].includes(tag(cell))));
 }
 
-export function isComplexTable(table) {
-  const rows = tableRows(table);
+export function isComplexTable(rows) {
   return rows.some(row => row.length !== rows[0].length)
     || rows.flat().some(cell => ['rowspan', 'colspan'].some(attr => cell.hasAttribute(attr) && Number(cell.getAttribute(attr)) !== 1)
       || [...cell.querySelectorAll('*')].some(node => blockTags.has(tag(node))));
@@ -57,12 +56,10 @@ export function normalize(html, itemIndex, warnings) {
     const rows = tableRows(table);
     const cells = rows.flat();
     if (!cells.length) { table.remove(); continue; }
-    if (isComplexTable(table)) warn('TABLE_FLATTENED');
+    if (isComplexTable(rows)) warn('TABLE_FLATTENED');
   }
-  return root.innerHTML;
-}
-
-export function hasContent(html) {
-  const root = fragmentRoot(html);
-  return Boolean(root.textContent.trim() || root.querySelector('img[src]'));
+  return {
+    html: root.innerHTML,
+    hasContent: Boolean(root.textContent.trim() || root.querySelector('img[src]')),
+  };
 }

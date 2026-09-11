@@ -17,7 +17,7 @@ export function allIncludingRoot(root, selector) {
   if (selector === ':scope') return [root];
   const matches = [...root.querySelectorAll(selector)];
   if (root.matches?.(selector)) matches.unshift(root);
-  return [...new Set(matches)];
+  return matches;
 }
 
 export function outermost(nodes) {

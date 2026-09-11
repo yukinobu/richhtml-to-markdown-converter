@@ -1,6 +1,6 @@
 import { allIncludingRoot, selectFirst } from './dom.js';
 import { diagnostic, ConversionError } from './diagnostics.js';
-import { normalize, hasContent } from './normalize.js';
+import { normalize } from './normalize.js';
 import { conversation, document } from './document-model.js';
 
 function selectedHtml(nodes, exclusions) {
@@ -30,8 +30,8 @@ export function extract(root, profile, registry, warnings) {
     return normalize(html, context.itemIndex, warnings);
   };
   if (profile.documentType === 'document') {
-    const html = content(selectFirst(root, profile.content.selectors));
-    if (!hasContent(html)) throw new ConversionError('NO_CONTENT');
+    const { html, hasContent } = content(selectFirst(root, profile.content.selectors));
+    if (!hasContent) throw new ConversionError('NO_CONTENT');
     return document(html, profile.id);
   }
   const { nodes } = selectFirst(root, profile.items.selectors);
@@ -49,8 +49,8 @@ export function extract(root, profile, registry, warnings) {
     }
     const selection = selectFirst(item, profile.items.content.selectors[role]);
     if (selection.selector === ':scope') warnings.push(diagnostic('CONTENT_FALLBACK', itemIndex));
-    const html = content(selection, { role, itemIndex });
-    if (!hasContent(html)) warnings.push(diagnostic('EMPTY_MESSAGE', itemIndex));
+    const { html, hasContent } = content(selection, { role, itemIndex });
+    if (!hasContent) warnings.push(diagnostic('EMPTY_MESSAGE', itemIndex));
     else items.push({ type: 'message', role, html });
   });
   if (!items.length) throw new ConversionError('NO_CONTENT');
