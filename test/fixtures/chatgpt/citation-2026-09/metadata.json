@@ -1,0 +1,10 @@
+{
+  "source": "chatgpt",
+  "captureMethod": "devtools-copy-element",
+  "element": "section (excerpt)",
+  "browser": null,
+  "captured": "2026-09-09",
+  "captureDateSource": "provided-filename",
+  "description": "実DOMの出典チップを抜粋。装飾用faviconだけを除去し、出典リンクを保持する。本文画像の保持確認用にテスト用画像を追加。",
+  "sanitization": "提供された実DOMから対象部分を抜粋。本文・コード・リンク先をテスト用データへ置換し、メッセージID・会話ID・個人情報を除去。ブラウザ種別は未確認。"
+}

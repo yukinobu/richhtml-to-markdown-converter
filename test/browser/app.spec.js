@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';
 import { esbuildProfiles } from '../../scripts/profile-plugin.mjs';
 
@@ -169,5 +170,19 @@ test('the parser remains inert even without CSP', async ({ page }) => {
   expect(converted.ok).toBe(true);
   expect(converted.markdown).toBe('safe\n\n![image](<https://example.com/image>)\n');
   expect(await page.evaluate(() => window.inputExecuted)).toBeUndefined();
+  expect(requests).toEqual([]);
+});
+
+test('converts captured ChatGPT structures through the standalone HTML without resource requests', async ({ page }) => {
+  const requests = [];
+  page.on('request', request => requests.push(request.url()));
+  await page.locator('#input-method').selectOption('source');
+  for (const fixture of ['code-viewer-2026-09', 'user-lines-2026-09', 'citation-2026-09']) {
+    const path = `test/fixtures/chatgpt/${fixture}`;
+    await paste(page, { 'text/plain': readFileSync(`${path}/input.html`, 'utf8') });
+    await page.locator('#convert').click();
+    await expect(page.locator('#output')).toHaveValue(readFileSync(`${path}/expected.md`, 'utf8'));
+    await expect(page.locator('#detected')).toHaveText('採用Profile: ChatGPT Conversation');
+  }
   expect(requests).toEqual([]);
 });
