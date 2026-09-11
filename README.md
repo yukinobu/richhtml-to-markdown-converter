@@ -8,14 +8,12 @@
 
 ## 起動方法
 
-開発環境で以下を実行すると、配布用HTMLを生成できます（Node.js 20.19以降、22系は22.12以降）。
+1. [リリースページ](https://github.com/yukinobu/richhtml-to-markdown-converter/releases)のAssetsから `rich-html-to-markdown.html` をダウンロードします。
+2. ダウンロードしたHTMLをブラウザで直接開きます。Node.jsやWebサーバーは必要ありません。
 
-```bash
-npm ci
-npm run build
-```
+入力方式「HTMLソース」を選ぶと、例えば `<h1>見出し</h1><p>本文</p>` を入力してConvertで変換できます。
 
-生成された `dist/rich-html-to-markdown.html` をブラウザで直接開いてください。このHTML単体の利用にはNode.jsやWebサーバーは必要ありません。入力方式「HTMLソース」を選ぶと、例えば `<h1>見出し</h1><p>本文</p>` を入力してConvertで変換できます。
+ソースコードからビルドする場合は、[開発者向けドキュメント](README-dev.md#セットアップ)を参照してください。
 
 ## 特徴
 
