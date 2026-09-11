@@ -1,0 +1,16 @@
+{
+  "mode": "auto",
+  "ok": true,
+  "profileId": "chatgpt-conversation",
+  "warnings": [
+    {
+      "code": "COMPLETENESS_UNVERIFIED"
+    },
+    {
+      "code": "POSSIBLE_MISSING_START"
+    },
+    {
+      "code": "MISSING_TURNS"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "mode": "auto",
+  "ok": false,
+  "profileId": "generic-html",
+  "warnings": [
+    {
+      "code": "URL_DROPPED"
+    }
+  ],
+  "error": {
+    "code": "NO_CONTENT"
+  }
+}

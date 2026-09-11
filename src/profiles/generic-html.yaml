@@ -1,0 +1,12 @@
+id: generic-html
+name: Generic HTML
+documentType: document
+content:
+  selectors:
+    - article
+    - main
+    - body
+exclude:
+  - script
+  - style
+  - nav

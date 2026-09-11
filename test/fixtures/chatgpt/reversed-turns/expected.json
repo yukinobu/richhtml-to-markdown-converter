@@ -1,0 +1,13 @@
+{
+  "mode": "auto",
+  "ok": true,
+  "profileId": "chatgpt-conversation",
+  "warnings": [
+    {
+      "code": "COMPLETENESS_UNVERIFIED"
+    },
+    {
+      "code": "TURN_SEQUENCE_INVALID"
+    }
+  ]
+}

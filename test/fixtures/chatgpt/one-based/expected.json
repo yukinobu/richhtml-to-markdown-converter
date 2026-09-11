@@ -1,0 +1,10 @@
+{
+  "mode": "auto",
+  "ok": true,
+  "profileId": "chatgpt-conversation",
+  "warnings": [
+    {
+      "code": "COMPLETENESS_UNVERIFIED"
+    }
+  ]
+}
