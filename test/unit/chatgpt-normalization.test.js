@@ -57,7 +57,7 @@ describe('user line breaks and citation UI', () => {
     expect(root.querySelector('strong').innerHTML).toBe('bold<br>next');
     expect(root.querySelector('code').textContent).toBe('a\nb');
     expect(root.querySelector('pre').textContent).toBe('one\n  two');
-    expect(result.markdown).toContain('\\# title\\\n');
+    expect(result.markdown).toContain('\\# title  \n');
   });
 
   it.each([
@@ -73,5 +73,59 @@ describe('user line breaks and citation UI', () => {
     expect(result.warnings.map(w => w.code)).toEqual(['COMPLETENESS_UNVERIFIED']);
     expect(result.markdown).toContain('[![Source](<https://example.com/source.png>)](<https://example.com>)');
     expect(result.markdown).toContain('![](<https://example.com/body.png>)');
+  });
+});
+
+describe('ChatGPT search labels and literal strong text', () => {
+  const pill = '<span data-inline-selection-pill data-id="search" data-keyword="ウェブ検索"><span>@ウェブ検索</span></span>';
+
+  it('converts the known user search pill while retaining ordinary mentions and unknown pills', () => {
+    const result = convert(message(`${pill} @ウェブ検索 <span data-inline-selection-pill data-id="other" data-keyword="other">@other</span>`, 'user'));
+    expect(result.markdown).toContain('〔ウェブ検索〕 @ウェブ検索 @other\n');
+  });
+
+  it.each(['assistant', 'unknown'])('does not reinterpret search mentions in %s content', role => {
+    const html = `<section data-testid="conversation-turn-0" data-turn="${role}">${pill}</section>`;
+    expect(convert(html).markdown).toContain('@ウェブ検索\n');
+  });
+
+  it('keeps search pills inside user code and in Generic HTML mode', () => {
+    expect(convert(message(`<code>${pill}</code>`, 'user')).markdown).toContain('`@ウェブ検索`');
+    expect(convert(message(pill, 'user'), { mode: 'generic-html' }).markdown).toBe('@ウェブ検索\n');
+  });
+
+  it('turns paired assistant text into semantic strong, including decoded entities', () => {
+    const result = convert(message('<p>**探索**では、**R&amp;D &lt; 100**。<em>**重要**</em></p>'));
+    const root = fragmentRoot(result.document.items[0].html);
+    expect([...root.querySelectorAll('strong')].map(node => node.textContent)).toEqual(['探索', 'R&D < 100', '重要']);
+    expect(result.markdown).toContain('**探索**では、**R&D < 100**。***重要***\n');
+  });
+
+  it('leaves code and existing strong elements intact', () => {
+    const result = convert(message('<p><code>**inline**</code><strong>**literal**</strong></p><pre><code>**fenced**\n  **next**</code></pre>'));
+    const root = fragmentRoot(result.document.items[0].html);
+    expect(root.querySelector('code').textContent).toBe('**inline**');
+    expect(root.querySelector('pre').textContent).toBe('**fenced**\n  **next**');
+    expect(root.querySelector('strong').textContent).toBe('**literal**');
+    expect(root.querySelector('strong strong')).toBeNull();
+    expect(result.markdown).toContain('`**inline**`');
+    expect(result.markdown).toContain('```\n**fenced**\n  **next**\n```');
+  });
+
+  it('does not pair an invalid opening with a later valid strong phrase', () => {
+    const result = convert(message('**trailing ** then **valid**'));
+    expect([...fragmentRoot(result.document.items[0].html).querySelectorAll('strong')].map(node => node.textContent)).toEqual(['valid']);
+  });
+
+  it.each(['**open', '** spaced **', '****', '***triple***', String.raw`\**escaped**`, '**first\nsecond**', '**<em>cross</em>**'])('preserves unsupported or incomplete delimiters: %s', html => {
+    const result = convert(message(`<p>${html}</p>`));
+    expect(fragmentRoot(result.document.items[0].html).querySelector('strong')).toBeNull();
+  });
+
+  it('does not interpret literal strong in user, unknown or Generic HTML content', () => {
+    const user = convert(message('<p>**literal**</p>', 'user'));
+    const unknown = convert('<section data-testid="conversation-turn-0"><p>**literal**</p></section>');
+    const generic = convert(message('<p>**literal**</p>'), { mode: 'generic-html' });
+    for (const result of [user, unknown, generic]) expect(result.markdown).toContain('\\*\\*literal\\*\\*\n');
   });
 });

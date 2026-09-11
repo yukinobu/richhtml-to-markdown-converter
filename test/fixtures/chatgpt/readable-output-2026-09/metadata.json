@@ -1,0 +1,8 @@
+{
+  "source": "chatgpt",
+  "captureMethod": "provided-html-excerpt",
+  "browser": null,
+  "captured": "2026-09-10",
+  "description": "検索ラベル、文字列の強調、記号、改行、表を含む実DOM由来の回帰fixture",
+  "sanitization": "提供HTMLのメッセージ・検索ラベル・表の構造を抜粋。本文はテスト用に置換・短縮し、IDと本文位置属性を削除。取得方法とブラウザは未確認。"
+}
