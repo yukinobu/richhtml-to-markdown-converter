@@ -3,18 +3,30 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';
-import { esbuildProfiles } from '../../scripts/profile-plugin.mjs';
+import { esbuildProfiles } from '../../scripts/profile-plugin.ts';
+import type { Page } from '@playwright/test';
+import type { convert } from '../../src/core/convert.ts';
+import { success } from '../assertions.ts';
+
+declare global {
+  interface Window {
+    copied?: string;
+    inputExecuted?: boolean;
+    violations: string[];
+    TestConverter: { convert: typeof convert };
+  }
+}
 
 const appUrl = pathToFileURL(resolve('dist/rich-html-to-markdown.html')).href;
 
-async function paste(page, formats) {
+async function paste(page: Page, formats: Record<string, string>) {
   await page.locator('#input').evaluate((input, formats) => {
     const clipboardData = new DataTransfer();
     for (const [mime, data] of Object.entries(formats)) clipboardData.setData(mime, data);
     input.dispatchEvent(new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true }));
   }, formats);
 }
-async function source(page, html = '<p>hello</p>') {
+async function source(page: Page, html = '<p>hello</p>') {
   await page.locator('#input-method').selectOption('source');
   await page.locator('#input').fill(html);
   await page.locator('#convert').click();
@@ -39,7 +51,8 @@ test('opens the standalone file with no external assets and converts rich HTML o
 test('rejects missing or blank rich HTML without changing previous data', async ({ page }) => {
   await paste(page, { 'text/html': '<p>keep</p>' });
   await page.locator('#convert').click();
-  for (const formats of [{ 'text/plain': 'hello' }, { 'text/html': ' \n' }]) {
+  const missingHtml: Record<string, string>[] = [{ 'text/plain': 'hello' }, { 'text/html': ' \n' }];
+  for (const formats of missingHtml) {
     await paste(page, formats);
     await expect(page.locator('#input-error')).toContainText('HTMLソース');
     await expect(page.locator('#input')).toHaveValue('<p>keep</p>');
@@ -97,7 +110,7 @@ test('shows the adopted profile on failure and allows explicit manual mode chang
 
 test('warnings do not prevent copying and only Markdown is copied', async ({ page }) => {
   await page.evaluate(() => {
-    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async text => { window.copied = text; } } });
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => { window.copied = text; } } });
   });
   await source(page, '<section data-testid="conversation-turn-5" data-turn="user"><div data-message-author-role="user">question</div></section>');
   await expect(page.locator('#warnings li')).toHaveCount(2);
@@ -121,7 +134,7 @@ for (const behavior of ['absent', 'reject']) {
     await expect(page.locator('#copy-status')).toContainText('Ctrl+C');
     await expect(page.locator('#output')).toHaveValue('hello\n');
     await expect(page.locator('#output')).toBeFocused();
-    expect(await page.locator('#output').evaluate(output => [output.selectionStart, output.selectionEnd])).toEqual([0, 6]);
+    expect(await page.locator('#output').evaluate((output: HTMLTextAreaElement) => [output.selectionStart, output.selectionEnd])).toEqual([0, 6]);
   });
 }
 
@@ -141,12 +154,12 @@ const hostile = `<body onload="window.inputExecuted=true" style="background:url(
   <p hidden>hidden</p><p aria-hidden="true">also hidden</p></article></body>`;
 
 test('startup, paste, convert and copy make no resource requests or execute input', async ({ page }) => {
-  const requests = [];
+  const requests: string[] = [];
   page.on('request', request => requests.push(request.url()));
   await page.addInitScript(() => {
     window.violations = [];
     document.addEventListener('securitypolicyviolation', event => window.violations.push(event.blockedURI));
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.copied = text; } } });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => { window.copied = text; } } });
   });
   await page.reload();
   await paste(page, { 'text/html': hostile, 'text/plain': 'ignored' });
@@ -161,20 +174,20 @@ test('startup, paste, convert and copy make no resource requests or execute inpu
 });
 
 test('the parser remains inert even without CSP', async ({ page }) => {
-  const result = await build({ entryPoints: ['src/core/convert.js'], bundle: true, write: false, format: 'iife', globalName: 'TestConverter', plugins: [esbuildProfiles] });
+  const result = await build({ entryPoints: ['src/core/convert.ts'], bundle: true, write: false, format: 'iife', globalName: 'TestConverter', plugins: [esbuildProfiles] });
   await page.goto('about:blank');
-  const requests = [];
+  const requests: string[] = [];
   page.on('request', request => requests.push(request.url()));
   await page.addScriptTag({ content: result.outputFiles[0].text });
   const converted = await page.evaluate(html => window.TestConverter.convert(html), hostile);
   expect(converted.ok).toBe(true);
-  expect(converted.markdown).toBe('safe\n\n![image](<https://example.com/image>)\n');
+  expect(success(converted).markdown).toBe('safe\n\n![image](<https://example.com/image>)\n');
   expect(await page.evaluate(() => window.inputExecuted)).toBeUndefined();
   expect(requests).toEqual([]);
 });
 
 test('converts captured ChatGPT structures through the standalone HTML without resource requests', async ({ page }) => {
-  const requests = [];
+  const requests: string[] = [];
   page.on('request', request => requests.push(request.url()));
   await page.locator('#input-method').selectOption('source');
   for (const fixture of ['code-viewer-2026-09', 'user-lines-2026-09', 'citation-2026-09', 'readable-output-2026-09']) {

@@ -1,7 +1,8 @@
-import { fragmentRoot, sanitize, blockTags, collapse, tag } from './dom.js';
-import { diagnostic } from './diagnostics.js';
+import { fragmentRoot, sanitize, blockTags, collapse, tag, isElement, isText } from './dom.ts';
+import { diagnostic } from './diagnostics.ts';
+import type { Diagnostic } from './document-model.ts';
 
-export function allowedUrl(raw, image = false) {
+export function allowedUrl(raw: string, image = false) {
   const url = raw.trim();
   if (/[\x00-\x1f\x7f]/.test(url)) return null;
   if (/^https?:\/\//i.test(url)) {
@@ -11,31 +12,31 @@ export function allowedUrl(raw, image = false) {
   return null;
 }
 
-function visibleText(node) {
-  if (node.nodeType === 3) return node.textContent;
-  if (node.nodeType !== 1) return '';
+function visibleText(node: Node): string {
+  if (isText(node)) return node.textContent;
+  if (!isElement(node)) return '';
   if (tag(node) === 'img') return node.getAttribute('alt') ?? '';
   if (tag(node) === 'br') return ' ';
   const text = [...node.childNodes].map(visibleText).join('');
   return blockTags.has(tag(node)) ? ` ${text} ` : text;
 }
 
-export function tableRows(table) {
+export function tableRows(table: Element) {
   return [...table.querySelectorAll('tr')].filter(row => row.closest('table') === table)
     .map(row => [...row.children].filter(cell => ['th', 'td'].includes(tag(cell))));
 }
 
-export function isComplexTable(rows) {
+export function isComplexTable(rows: Element[][]) {
   return rows.some(row => row.length !== rows[0].length)
     || rows.flat().some(cell => ['rowspan', 'colspan'].some(attr => cell.hasAttribute(attr) && Number(cell.getAttribute(attr)) !== 1)
       || [...cell.querySelectorAll('*')].some(node => blockTags.has(tag(node))));
 }
 
-export const flatCellText = cell => collapse(visibleText(cell)).trim();
+export const flatCellText = (cell: Element) => collapse(visibleText(cell)).trim();
 
-export function normalize(html, itemIndex, warnings) {
+export function normalize(html: string, itemIndex: number | undefined, warnings: Diagnostic[]) {
   const root = sanitize(fragmentRoot(html));
-  const warn = code => warnings.push(diagnostic(code, itemIndex));
+  const warn = (code: string) => warnings.push(diagnostic(code, itemIndex));
   for (const node of root.querySelectorAll('a[href], img')) {
     const image = tag(node) === 'img';
     const attribute = image ? 'src' : 'href';
@@ -52,7 +53,7 @@ export function normalize(html, itemIndex, warnings) {
     node.removeAttribute(tag(node) === 'ol' ? 'reversed' : 'value');
   }
   // Only process outer tables: flattened nested content must appear once.
-  for (const table of [...root.querySelectorAll('table')].filter(table => !table.parentElement.closest('table'))) {
+  for (const table of [...root.querySelectorAll('table')].filter(table => !table.parentElement?.closest('table'))) {
     const rows = tableRows(table);
     const cells = rows.flat();
     if (!cells.length) { table.remove(); continue; }

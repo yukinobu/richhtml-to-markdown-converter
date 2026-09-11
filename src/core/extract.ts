@@ -1,11 +1,13 @@
-import { allIncludingRoot, selectFirst } from './dom.js';
-import { diagnostic, ConversionError } from './diagnostics.js';
-import { normalize } from './normalize.js';
-import { conversation, document } from './document-model.js';
+import { allIncludingRoot, selectFirst } from './dom.ts';
+import { diagnostic, ConversionError } from './diagnostics.ts';
+import { normalize } from './normalize.ts';
+import { conversation, document } from './document-model.ts';
+import type { Diagnostic, Message, SemanticDocument } from './document-model.ts';
+import type { ContentContext, HookRegistry, Profile } from './profile.ts';
 
-function selectedHtml(nodes, exclusions) {
+function selectedHtml(nodes: Element[], exclusions: (string[] | undefined)[]) {
   return nodes.map(node => {
-    const clone = node.cloneNode(true);
+    const clone = node.cloneNode(true) as Element;
     for (const selectors of exclusions) {
       for (const selector of selectors ?? []) {
         for (const excluded of allIncludingRoot(clone, selector)) {
@@ -18,9 +20,13 @@ function selectedHtml(nodes, exclusions) {
   }).join('\n');
 }
 
-export function extract(root, profile, registry, warnings) {
-  const hooks = Object.fromEntries(Object.entries(profile.hooks ?? {}).map(([key, name]) => [key, registry[name]]));
-  const content = (selection, context = {}) => {
+export function extract(root: Element, profile: Profile, registry: HookRegistry, warnings: Diagnostic[]): SemanticDocument {
+  const hooks = {
+    resolveRole: profile.hooks?.resolveRole === undefined ? undefined : registry.resolveRole?.[profile.hooks.resolveRole],
+    normalizeContent: profile.hooks?.normalizeContent === undefined ? undefined : registry.normalizeContent?.[profile.hooks.normalizeContent],
+    inspectDocument: profile.hooks?.inspectDocument === undefined ? undefined : registry.inspectDocument?.[profile.hooks.inspectDocument],
+  };
+  const content = (selection: ReturnType<typeof selectFirst>, context: ContentContext = {}) => {
     let html = selectedHtml(selection.nodes, [profile.exclude, profile.items?.exclude]);
     if (hooks.normalizeContent) {
       const result = hooks.normalizeContent(html, context);
@@ -37,11 +43,11 @@ export function extract(root, profile, registry, warnings) {
   const { nodes } = selectFirst(root, profile.items.selectors);
   if (!nodes.length) throw new ConversionError('NO_ITEMS');
   if (hooks.inspectDocument) warnings.push(...hooks.inspectDocument(root, nodes).warnings);
-  const items = [];
+  const items: Message[] = [];
   nodes.forEach((item, itemIndex) => {
     const mapping = profile.items.role;
     const value = mapping?.attribute ? item.getAttribute(mapping.attribute) : null;
-    let role = mapping?.map && Object.hasOwn(mapping.map, value) ? mapping.map[value] : 'unknown';
+    let role = mapping?.map && value !== null && Object.hasOwn(mapping.map, value) ? mapping.map[value] : 'unknown';
     if (hooks.resolveRole) {
       const result = hooks.resolveRole(item, role, itemIndex);
       role = result.role;

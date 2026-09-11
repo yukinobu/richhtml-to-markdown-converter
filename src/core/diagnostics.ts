@@ -1,4 +1,6 @@
-const messages = {
+import type { Diagnostic } from './document-model.ts';
+
+const messages: Record<string, string> = {
   EMPTY_INPUT: 'HTMLを入力してください。',
   INVALID_MODE: '指定された変換モードは利用できません。',
   INVALID_PROFILE: '変換Profileの定義が不正です。',
@@ -18,23 +20,24 @@ const messages = {
   LIST_NUMBERING_NORMALIZED: 'リストの逆順指定または個別の番号指定を通常の連番に変換しました。',
 };
 
-export function diagnostic(code, itemIndex) {
+export function diagnostic(code: string, itemIndex?: number): Diagnostic {
   return { code, message: messages[code] ?? code, ...(itemIndex === undefined ? {} : { itemIndex }) };
 }
 
 export class ConversionError extends Error {
-  constructor(code) { super(code); this.code = code; }
+  code: string;
+  constructor(code: string) { super(code); this.code = code; }
 }
 
 const inspectionOrder = ['COMPLETENESS_UNVERIFIED', 'POSSIBLE_MISSING_START', 'TURN_SEQUENCE_INVALID', 'MISSING_TURNS'];
-export function sortWarnings(warnings) {
-  const first = new Map();
+export function sortWarnings(warnings: Diagnostic[]): Diagnostic[] {
+  const first = new Map<string, Diagnostic>();
   for (const warning of warnings) {
     const key = `${warning.code}:${warning.itemIndex ?? ''}`;
     if (!first.has(key)) first.set(key, warning);
   }
   const unique = [...first.values()];
-  const rank = warning => warning.itemIndex === undefined && inspectionOrder.includes(warning.code)
+  const rank = (warning: Diagnostic) => warning.itemIndex === undefined && inspectionOrder.includes(warning.code)
     ? inspectionOrder.indexOf(warning.code) - 5 : (warning.itemIndex ?? 0);
   return unique.sort((a, b) => rank(a) - rank(b) || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
 }

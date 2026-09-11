@@ -1,16 +1,18 @@
-import { profiles as builtins } from '../profiles/index.js';
-import { hookRegistry } from '../hooks/chatgpt.js';
-import { parseDocument, sanitize } from './dom.js';
-import { validateProfiles } from './profile-schema.js';
-import { detectSource } from './detect-source.js';
-import { extract } from './extract.js';
-import { renderMarkdown } from './render-markdown.js';
-import { diagnostic, ConversionError, sortWarnings } from './diagnostics.js';
+import { profiles as builtins } from '../profiles/index.ts';
+import { hookRegistry } from '../hooks/chatgpt.ts';
+import { parseDocument, sanitize } from './dom.ts';
+import { validateProfiles } from './profile-schema.ts';
+import { detectSource } from './detect-source.ts';
+import { extract } from './extract.ts';
+import { renderMarkdown } from './render-markdown.ts';
+import { diagnostic, ConversionError, sortWarnings } from './diagnostics.ts';
+import type { ConvertResult, Diagnostic } from './document-model.ts';
+import type { HookRegistry, Profile } from './profile.ts';
 
-export function createConverter(profiles, registry = {}) {
-  return function convert(html, { mode = 'auto' } = {}) {
-    let profileId = null;
-    const warnings = [];
+export function createConverter(profiles: Profile[], registry: HookRegistry = {}) {
+  return function convert(html: string, { mode = 'auto' }: { mode?: string } = {}): ConvertResult {
+    let profileId: string | null = null;
+    const warnings: Diagnostic[] = [];
     try {
       if (mode !== 'auto' && !profiles.some(profile => profile.id === mode)) throw new ConversionError('INVALID_MODE');
       if (typeof html !== 'string') throw new ConversionError('CONVERSION_FAILED');

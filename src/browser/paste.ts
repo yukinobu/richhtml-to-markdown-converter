@@ -1,4 +1,6 @@
-export function readPaste(event, method) {
+type PasteResult = { ok: true; value: string } | { ok: false; message: string };
+
+export function readPaste(event: ClipboardEvent, method: string): PasteResult {
   event.preventDefault();
   const mime = method === 'rich' ? 'text/html' : 'text/plain';
   const value = event.clipboardData?.getData(mime) ?? '';

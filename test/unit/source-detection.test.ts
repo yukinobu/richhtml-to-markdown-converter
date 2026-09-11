@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { convert, createConverter } from '../../src/core/convert.js';
-import { profiles } from '../../src/profiles/index.js';
-import { hookRegistry } from '../../src/hooks/chatgpt.js';
+import { convert, createConverter } from '../../src/core/convert.ts';
+import { profiles } from '../../src/profiles/index.ts';
+import { hookRegistry } from '../../src/hooks/chatgpt.ts';
 
 describe('source detection and errors', () => {
   it.each([
@@ -32,7 +32,7 @@ describe('source detection and errors', () => {
   });
 
   it('contains unexpected hook failures without exposing input or stack', () => {
-    const custom = createConverter(profiles, { ...hookRegistry, chatgptNormalizeContent() { throw new Error('SECRET HTML'); } });
+    const custom = createConverter(profiles, { ...hookRegistry, normalizeContent: { chatgptNormalizeContent() { throw new Error('SECRET HTML'); } } });
     const result = custom('<div data-message-author-role="user">SECRET HTML</div>');
     expect(result).toMatchObject({ ok: false, error: { code: 'CONVERSION_FAILED' }, warnings: [{ code: 'COMPLETENESS_UNVERIFIED' }] });
     expect(JSON.stringify(result)).not.toContain('SECRET');
