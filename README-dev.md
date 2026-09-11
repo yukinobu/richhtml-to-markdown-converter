@@ -172,7 +172,7 @@ Document
 
 ### 初期実装のデータ契約
 
-以下はJavaScript実装で共有する型の表記です。`html` は安全性処理・正規化済みのHTML断片文字列であり、DOMオブジェクトを層間の公開データに含めません。
+共有型は `src/core/document-model.ts` に定義し、TypeScriptで検査します。以下は組み込みProfileのデータ契約です。`html` は安全性処理・正規化済みのHTML断片文字列であり、DOMオブジェクトを層間の公開データに含めません。
 
 ```ts
 type Message = {
@@ -313,7 +313,7 @@ hooks:
 
 すべてのDOM構造を宣言的Profileだけで表現しようとはしません。
 
-サービス固有の特殊処理が必要な場合は、JavaScript hookへ処理を委譲できます。
+サービス固有の特殊処理が必要な場合は、TypeScript hookへ処理を委譲できます。
 
 ```text
 Profile
@@ -335,7 +335,19 @@ hooks:
   normalizeContent: chatgptNormalizeContent
 ```
 
-のようにProfileからhookを指定できる構成を想定します。
+のようにProfileからhookを指定します。
+
+`src/core/profile.ts` の `Hooks` が引数・戻り値の契約、`HookRegistry` が役割ごとの登録形式です。例えば `src/hooks/chatgpt.ts` では次のように登録します。
+
+```ts
+export const hookRegistry = {
+  resolveRole: { chatgptResolveRole },
+  normalizeContent: { chatgptNormalizeContent },
+  inspectDocument: { chatgptInspectDocument },
+} satisfies HookRegistry;
+```
+
+追加hookは対応する役割のmapに登録します。YAMLで別の役割の関数名を指定した場合も `INVALID_PROFILE` として拒否します。
 
 hook名はビルドに含めた関数のregistryで解決し、入力HTMLから関数名やコードを読み込みません。初期契約は以下です。
 
@@ -569,36 +581,48 @@ warningコードは各規則に記載したものを使用します。UI文言�
 ├── README-dev.md
 ├── package.json
 ├── package-lock.json
+├── tsconfig.json
+├── vitest.config.ts
+├── playwright.config.ts
 │
 ├── src/
 │   ├── index.template.html
 │   ├── style.css
 │   │
 │   ├── core/
-│   │   ├── convert.js
-│   │   ├── detect-source.js
-│   │   ├── extract.js
-│   │   ├── document-model.js
-│   │   ├── normalize.js
-│   │   └── render-markdown.js
+│   │   ├── convert.ts
+│   │   ├── detect-source.ts
+│   │   ├── extract.ts
+│   │   ├── document-model.ts
+│   │   ├── profile.ts
+│   │   ├── profile-schema.ts
+│   │   ├── diagnostics.ts
+│   │   ├── dom.ts
+│   │   ├── normalize.ts
+│   │   └── render-markdown.ts
 │   │
 │   ├── profiles/
+│   │   ├── index.ts
+│   │   ├── yaml.d.ts
 │   │   ├── chatgpt.yaml
 │   │   └── generic-html.yaml
 │   │
 │   ├── hooks/
-│   │   └── chatgpt.js
+│   │   └── chatgpt.ts
 │   │
 │   └── browser/
-│       ├── paste.js
-│       ├── ui.js
-│       └── app.js
+│       ├── paste.ts
+│       ├── ui.ts
+│       └── app.ts
 │
 ├── test/
+│   ├── assertions.ts
+│   ├── fixtures.test.ts
+│   ├── type-contracts.ts
 │   ├── unit/
-│   │   ├── profile-engine.test.js
-│   │   ├── source-detection.test.js
-│   │   └── markdown-renderer.test.js
+│   │   ├── profile-engine.test.ts
+│   │   ├── source-detection.test.ts
+│   │   └── markdown-renderer.test.ts
 │   │
 │   ├── fixtures/
 │   │   ├── chatgpt/
@@ -625,10 +649,11 @@ warningコードは各規則に記載したものを使用します。UI文言�
 │   │           └── expected.md
 │   │
 │   └── browser/
-│       └── app.spec.js
+│       └── app.spec.ts
 │
 ├── scripts/
-│   └── build.mjs
+│   ├── build.ts
+│   └── profile-plugin.ts
 │
 └── dist/
     └── rich-html-to-markdown.html
@@ -888,6 +913,7 @@ chatgpt/body-partial/
 
 * Node.js 20.19以降（22系は22.12以降。CIは22系）
 * npm
+* TypeScript
 * esbuild
 * Vitest
 * Playwright
@@ -898,7 +924,8 @@ chatgpt/body-partial/
 | ---------- | ------------------------- |
 | Node.js    | 開発・ビルド環境                  |
 | npm        | パッケージ管理                   |
-| esbuild    | JavaScript bundling       |
+| TypeScript | strict型チェック            |
+| esbuild    | TypeScript変換・JavaScript bundling |
 | Vitest     | Unit / fixture tests      |
 | Playwright | Browser integration tests |
 
@@ -917,6 +944,20 @@ Playwrightのブラウザが必要な場合:
 ```bash
 npx playwright install chromium
 ```
+
+## 型チェック
+
+```bash
+npm run typecheck
+```
+
+本体・hook・テスト・ビルドスクリプト・設定ファイルを `strict: true` で検査します。`tsc --noEmit` は型チェックのみを行い、JavaScriptへの変換はesbuildとテストランナーが担当します。`test/type-contracts.ts` では、成功／失敗・文書種別による絞り込みとhookの型の取り違えをコンパイル時に検証します。
+
+`SemanticDocument` と `ConvertResult` は判別可能なunionです。`document.type` や `result.ok` を確認してから種別固有のフィールドを使います。追加サービスのため、`metadata.source` と変換モードのProfile IDは `string` としています。
+
+YAMLのimportは `unknown` として扱い、既存の `validateProfiles` で検証してから `Profile[]` として利用します。型チェック後も実行時のProfile検証・HTMLの安全性処理・URL検証を行います。
+
+LinkeDOMの型定義にある広い型を本体へ伝播させないため、`src/core/dom.ts` のparser境界で標準DOM型へ合わせています。`skipLibCheck` は依存ライブラリの宣言ファイルの検査を省略する設定で、本体・テストの型検査は有効です。
 
 ## Unit / fixture tests
 
@@ -938,7 +979,7 @@ npm run build
 dist/rich-html-to-markdown.html
 ```
 
-を生成します。
+を生成します。ビルドスクリプト自身もesbuildで `node_modules/.cache/richhtml/build.mjs` に変換してからNode.jsで実行するため、Node.jsのネイティブTS実行機能や追加のTS実行ローダーは使いません。この中間ファイルはビルドごとに再生成し、配布物には含めません。
 
 ## Browser tests
 
@@ -959,6 +1000,9 @@ npm run check
 概念的には以下を実行します。
 
 ```text
+Type check
+    |
+    v
 Unit tests
     |
     v
@@ -976,10 +1020,10 @@ Browser tests
 
 ## ビルド処理
 
-開発中はHTML、CSS、JavaScript、Profileを分離します。
+開発中はHTML、CSS、TypeScript、Profileを分離します。
 
 ```text
-JavaScript modules
+TypeScript modules
         |
         | esbuild
         v
@@ -1000,7 +1044,7 @@ index.template.html         |
         |          |        |
         +----------+--------+
                    |
-                   | build.mjs
+                   | build.ts
                    v
 dist/rich-html-to-markdown.html
 ```
@@ -1030,6 +1074,7 @@ dist/rich-html-to-markdown.html
 少なくとも以下を提供します。
 
 ```text
+npm run typecheck
 npm test
 npm run build
 npm run test:e2e
