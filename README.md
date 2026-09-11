@@ -2,9 +2,7 @@
 
 ブラウザ上のコンテンツをHTMLとして取得し、再利用しやすいMarkdownへ変換するローカルツールです。
 
-最初の主要な対象としてChatGPTの会話を想定していますが、特定のWebサービスだけに依存せず、変換モードを追加することで他のWebサービスや一般的なHTMLへ拡張できる設計を目指します。
-
-初期実装としてAuto、ChatGPT Conversation、Generic HTMLの変換と単一HTMLへのビルドを提供しています。仕様に基づく合成fixtureに加え、2026年9月9日付のChatGPT実DOMから匿名化・抜粋したfixtureとChromiumのブラウザテストで検証しています。デスクトップChrome・Edgeの実クリップボードによる確認は未実施です。サービス固有の抽出規則は暫定仕様として、実HTMLのfixtureによる検証を通じて見直します。詳細な規則は [README-dev.md](README-dev.md) に記載します。
+ChatGPTの会話や一般的なHTMLをMarkdownへ変換できます。変換モードはAuto、ChatGPT Conversation、Generic HTMLの3種類です。
 
 ## 起動方法
 
@@ -26,27 +24,10 @@
 * ChatGPTなど特定サービス向けの変換モードを利用可能
 * HTMLの種類に応じた変換モードの自動判定
 * 必要に応じた変換モードの手動選択
-* 将来的に新しいWebサービス向け変換モードを追加可能
 
-## 基本的な考え方
+## 対応する入力
 
 見出し、リスト、コードブロック、リンク、強調などの情報を保持するため、入力はHTMLを前提とします。
-
-```text
-HTML
-  |
-  v
-Extraction
-  |
-  v
-Semantic Document
-  |
-  v
-Markdown Renderer
-  |
-  v
-Markdown
-```
 
 コピー元からHTMLを取得できない場合、その入力は本ツールの変換対象外です。
 
@@ -98,22 +79,6 @@ Converter
 
 この方法では、通常の範囲選択コピーよりも多くのDOM属性や構造を保持できることがあります。
 
-ChatGPTでは例えば以下のような情報がHTML中に含まれる場合があります。
-
-```html
-<section
-  data-testid="conversation-turn-5"
-  data-turn="user">
-```
-
-また、各メッセージに次のような属性が含まれる場合があります。
-
-```html
-<div data-message-author-role="assistant">
-```
-
-これらを利用することで、単なる見た目ではなく、UserとAssistantの区別なども抽出できます。
-
 ## ChatGPTでの利用
 
 ChatGPTでは、Developer Toolsから会話を含むDOMをコピーする方法を推奨します。
@@ -135,19 +100,6 @@ Convert
 ```
 
 ツール側ではページ全体をそのままMarkdownへ変換するのではなく、ChatGPT用の変換モードによって会話部分を抽出します。
-
-例えば以下のような情報を利用できます。
-
-```text
-conversation turn
-user / assistant
-message content
-Markdown-rendered response
-code block
-table
-list
-link
-```
 
 ### body全体をコピーする場合の注意
 
@@ -180,51 +132,21 @@ link
 
 ## 変換モード
 
-入力HTMLの種類ごとに「変換モード」を使用します。
-
-変換モードは、HTMLのどの部分を意味のある文書要素として抽出するかを定義します。
-
-想定するモードの例:
-
-```text
-Auto
-ChatGPT Conversation
-Generic HTML
-GitHub
-Claude
-Gemini
-...
-```
-
-本バージョンでは以下を想定します。
+入力HTMLに応じて、以下の3種類から選べます。
 
 ### Auto
 
 入力HTMLを解析し、利用可能な変換モードを自動判定します。
 
-ChatGPTのターン属性、またはUser/Assistantを示す著者属性があればChatGPT Conversationを選び、それ以外はGeneric HTMLを選びます。選ばれたモードで抽出に失敗した場合はエラーを表示します。モードの変更は利用者が明示的に行います。
+ChatGPTの会話と判定した場合はChatGPT Conversationを、それ以外はGeneric HTMLを選びます。選ばれたモードで抽出に失敗した場合はエラーを表示します。モードの変更は利用者が明示的に行います。
 
 ### ChatGPT Conversation
 
-ChatGPTのDOMから、
+ChatGPTの会話からUserとAssistantのメッセージを抽出し、話者ごとに分けて出力します。
 
-```text
-conversation
-  |
-  +-- user message
-  |
-  +-- assistant message
-  |
-  +-- user message
-  |
-  +-- assistant message
-```
+コードブロックには取得できた言語名を付けます。ユーザー投稿の改行を保持しますが、ログなどを自動でコードブロックに変換することはありません。出典リンク内の装飾用アイコンは除き、リンク自体と通常の本文画像は保持します。
 
-という構造を抽出します。
-
-2026年9月の実DOMで確認したコードビューアでは、言語ラベルと操作UIをコード本文から分離し、言語名をコードフェンスへ付けます。ユーザー投稿の既知の本文要素では改行を保持しますが、ログなどを自動でコードブロックに変換することはありません。出典リンク内の装飾用アイコンは除き、リンク自体と通常の本文画像は保持します。
-
-ChatGPTのユーザー投稿に含まれる検索ラベルは `〔ウェブ検索〕` のように出力します。Assistant本文に文字として残った対応する `**...**` は強調として扱います。この補正は同一テキスト内に限定し、コード・既存の強調・ユーザー投稿・Generic HTMLには適用しません。
+ユーザー投稿に含まれる検索ラベルは `〔ウェブ検索〕` のように出力します。Assistant本文に文字として残った `**...**` は、対応する区切りがある場合に強調として扱います。
 
 ### Generic HTML
 
@@ -241,52 +163,11 @@ ChatGPTのユーザー投稿に含まれる検索ラベルは `〔ウェブ検�
 
 貼り付けだけでは変換しません。入力の変更、受け付けた貼り付け、入力方式・変換モードの変更時には、前回の出力と診断表示をクリアします。入力方式を変更した場合は入力もクリアします。空入力や変換可能な本文がない入力はエラーとなり、Markdownは出力しません。
 
-初期実装の対応対象はデスクトップ版ChromeとEdgeです。リリース時点の安定版で、配布HTMLを `file://` から直接開く操作を確認します。Firefox、Safari、モバイルブラウザは初期実装の動作保証対象に含めません。
+対応対象はデスクトップ版ChromeとEdgeです。ただし、実クリップボードを使った操作確認は未実施です。Firefox、Safari、モバイルブラウザは動作保証対象に含めません。
 
-## 変換処理
+## 変換できる要素
 
-変換処理は大きく2段階に分かれます。
-
-### 1. HTMLから意味構造を抽出
-
-変換モードが入力HTMLから必要な部分を抽出します。
-
-ChatGPTの場合は例えば、
-
-```text
-Raw ChatGPT DOM
-       |
-       v
-Conversation extraction
-       |
-       v
-User message
-Assistant message
-User message
-Assistant message
-```
-
-のようになります。
-
-### 2. 意味構造をMarkdownへ変換
-
-抽出された内容を共通Markdown Rendererで変換します。
-
-例えば、
-
-```html
-<strong>important</strong>
-```
-
-は、
-
-```markdown
-**important**
-```
-
-へ変換されます。
-
-同様に、主に以下をMarkdownへ変換します。
+主に以下をMarkdownへ変換します。
 
 * 見出し
 * 段落
@@ -301,34 +182,6 @@ Assistant message
 * コードブロック
 * 表
 * 画像参照
-
-## 変換モードとMarkdownの責務
-
-変換モードは、HTMLの意味を判断する役割を持ちます。
-
-例えばChatGPT用モードは、
-
-```text
-この要素はUserのメッセージ
-この要素はAssistantのメッセージ
-この要素は本文
-この要素はUIなので無視
-```
-
-と判断します。
-
-一方、
-
-```text
-strong → **...**
-h2 → ## ...
-ul → Markdown list
-pre/code → fenced code block
-```
-
-といったMarkdown表現は、共通Markdown Rendererが担当します。
-
-この分離により、サービスごとに異なるMarkdown変換ロジックを持たせる必要がありません。
 
 ## 出力例
 
@@ -366,42 +219,6 @@ const value = 123;
 
 画像はHTTP(S)のURLを参照するMarkdownとして出力し、画像自体は取得・保存しません。リンクはHTTP(S)、`mailto:`、`tel:`、同一文書内の `#...` を保持します。相対URLやその他の形式のURLは解決せず、リンクなら本文、画像なら代替テキストを残して警告します。
 
-## 今後の拡張
-
-新しいWebサービスに対応する場合、そのサービス用のExtraction Profileを追加します。
-
-例えばGitHub Issueなら、
-
-```text
-title
-author
-issue body
-comments
-````
-
-を抽出するProfileを定義できます。
-
-生成AIサービスなら、
-
-```text
-message
-role
-content
-```
-
-を抽出できます。
-
-一般的なWeb記事なら、
-
-```text
-title
-article body
-```
-
-を抽出できます。
-
-このため、Markdown Renderer自体をサービスごとに変更する必要はありません。
-
 ## 保存形式
 
 基本的な出力形式としてMarkdownを使用します。
@@ -424,13 +241,7 @@ Markdownはプレーンテキストであり、特定のアプリケーション
 
 貼り付け、解析、変換、出力表示ではネットワーク通信を行わず、入力HTMLを外部サーバーへ送信しません。
 
-配布版では以下を必須とします。
-
-* 外部JavaScriptを読み込まない
-* 外部CSSを読み込まない
-* Analyticsを使用しない
-* 変換処理でネットワーク通信を行わない
-* 入力HTMLを外部へ送信しない
+外部JavaScript・CSSの読み込みやAnalyticsの使用もありません。
 
 入力HTMLはテキストとして表示し、スクリプトの実行や画像・iframeなどの外部リソースの読み込みを行いません。入力と出力をブラウザの永続ストレージへ保存せず、ページを閉じるとツール内のデータは失われます。利用者がコピーしたクリップボードの内容はこの対象外です。
 
@@ -460,7 +271,7 @@ Markdownはプレーンテキストであり、特定のアプリケーション
 
 また、ChatGPTなどのWebサービスのDOM構造は公開APIではありません。
 
-サービス側のUI変更によってExtraction Profileの更新が必要になる場合があります。
+サービス側のUI変更によって正しく変換できなくなる場合があります。
 
 ## 配布形式
 
@@ -474,4 +285,4 @@ rich-html-to-markdown.html
 
 Node.jsやnpmなどの開発環境は利用時には必要ありません。
 
-開発方法およびExtraction Profileの構成については `README-dev.md` を参照してください。
+内部構造、開発方針、検証状況、ソースコードからのビルド方法は [開発者向けドキュメント](README-dev.md) を参照してください。
