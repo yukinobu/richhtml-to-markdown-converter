@@ -92,10 +92,7 @@ describe('profile validation', () => {
     (p: ConversationProfile) => { p.hooks!.normalizeContent = 'missing'; },
     (p: ConversationProfile) => { p.hooks!.normalizeContent = 'toString'; },
     (p: ConversationProfile) => { p.hooks!.normalizeContent = 'chatgptResolveRole'; },
-    (p: ConversationProfile) => {
-      // @ts-expect-error Both detection operators are invalid.
-      p.detect = { any: ['p'], all: ['p'] };
-    },
+    (p: ConversationProfile) => { p.detect!.all = ['p']; },
     (p: ConversationProfile) => {
       // @ts-expect-error Only message items are supported.
       p.items.type = 'other';
