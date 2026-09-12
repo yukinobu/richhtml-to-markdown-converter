@@ -1,5 +1,5 @@
 import { it, expect } from 'vitest';
-import { sortWarnings } from '../../src/core/diagnostics.js';
+import { sortWarnings } from '../../src/core/diagnostics.ts';
 
 it('keeps the first diagnostic per code and original item index in specified order', () => {
   const first = { code: 'URL_DROPPED', itemIndex: 2, message: 'first' };

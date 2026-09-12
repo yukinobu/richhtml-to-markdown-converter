@@ -1,29 +1,33 @@
-import { fragmentRoot, tag, collapse, trimHtmlSpace, blockTags } from './dom.js';
-import { tableRows, isComplexTable, flatCellText } from './normalize.js';
+import { fragmentRoot, tag, collapse, trimHtmlSpace, blockTags, isElement, isText } from './dom.ts';
+import { tableRows, isComplexTable, flatCellText } from './normalize.ts';
+import type { SemanticDocument } from './document-model.ts';
+
+type Context = { headingOffset: number; table: boolean };
+type Block = { text: string; list: boolean };
 
 const inlineTags = new Set(['strong', 'b', 'em', 'i', 'del', 's', 'a', 'img', 'code', 'br']);
 const tableTags = new Set(['caption', 'colgroup', 'col', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td']);
 // Keep prose punctuation readable, but protect literal inline Markdown, HTML,
 // autolinks and character references. End-of-node guards also cover split text.
-export const escapeText = text => text.replace(/[\\`*_[\]|~]/g, '\\$&')
+export const escapeText = (text: string) => text.replace(/[\\`*_[\]|~]/g, '\\$&')
   .replace(/<(?=\S|$)/g, '\\<')
   .replace(/&(?=(?:#[xX][\da-fA-F]+|#\d+|[A-Za-z][A-Za-z\d]*);|$)/g, '\\&');
-const escapeBlockStart = text => text
+const escapeBlockStart = (text: string) => text
   .replace(/^( *)(#{1,6})(?= |$)/gm, '$1\\$2')
   .replace(/^( *)(>)/gm, '$1\\$2')
   .replace(/^( *)([-+])(?= |$)/gm, '$1\\$2')
   .replace(/^( *)(\d{1,9})([.)])(?= |$)/gm, '$1$2\\$3')
   .replace(/^( *)([-=])(?=[ -=]*$)/gm, '$1\\$2');
-const longestTicks = text => Math.max(0, ...(text.match(/`+/g) ?? []).map(run => run.length));
-const encodeUrl = url => url.replace(/[ <>]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
-const joinInline = parts => parts.reduce((text, part) => {
+const longestTicks = (text: string) => Math.max(0, ...(text.match(/`+/g) ?? []).map(run => run.length));
+const encodeUrl = (url: string) => url.replace(/[ <>]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+const joinInline = (parts: string[]) => parts.reduce((text, part) => {
   if (part.startsWith('  \n')) return text.replace(/ +$/, '') + part;
   if (part.startsWith('[')) text = text.replace(/(?<!\\)!$/, '\\!');
   return text + (/[ \n]$/.test(text) ? part.replace(/^ +/, '') : part);
 }, '');
 
 const graphemes = new Intl.Segmenter('en', { granularity: 'grapheme' });
-function sourceWidth(text) {
+function sourceWidth(text: string) {
   // Measure Markdown source, including delimiters. CJK/fullwidth and emoji
   // occupy two columns; combining marks stay with their base character.
   let width = 0;
@@ -34,7 +38,7 @@ function sourceWidth(text) {
   return width;
 }
 
-function inlineCode(text) {
+function inlineCode(text: string) {
   text = text.replace(/\r\n?|\n/g, ' ');
   if (!text) return '';
   const delimiter = '`'.repeat(longestTicks(text) + 1);
@@ -42,17 +46,17 @@ function inlineCode(text) {
   return delimiter + text + delimiter;
 }
 
-function decoration(text, delimiter) {
+function decoration(text: string, delimiter: string) {
   const inner = trimHtmlSpace(text);
   if (!inner) return text;
-  const leading = text.match(/^[\t\n\f\r ]*/)[0];
-  const trailing = text.match(/[\t\n\f\r ]*$/)[0];
+  const leading = text.match(/^[\t\n\f\r ]*/)![0];
+  const trailing = text.match(/[\t\n\f\r ]*$/)![0];
   return `${leading}${delimiter}${inner}${delimiter}${trailing}`;
 }
 
-function inline(node, context) {
-  if (node.nodeType === 3) return escapeText(collapse(node.textContent));
-  if (node.nodeType !== 1) return '';
+function inline(node: Node, context: Context): string {
+  if (isText(node)) return escapeText(collapse(node.textContent));
+  if (!isElement(node)) return '';
   const name = tag(node);
   if (name === 'br') return context.table ? ' ' : '  \n';
   if (name === 'code') return inlineCode(node.textContent);
@@ -60,12 +64,12 @@ function inline(node, context) {
   if (['strong', 'b'].includes(name)) return decoration(children(), '**');
   if (['em', 'i'].includes(name)) return decoration(children(), '*');
   if (['del', 's'].includes(name)) return decoration(children(), '~~');
-  if (name === 'a' && node.hasAttribute('href')) return `[${children()}](<${encodeUrl(node.getAttribute('href'))}>)`;
-  if (name === 'img') return `![${escapeText(collapse(node.getAttribute('alt') ?? ''))}](<${encodeUrl(node.getAttribute('src'))}>)`;
+  if (name === 'a' && node.hasAttribute('href')) return `[${children()}](<${encodeUrl(node.getAttribute('href')!)}>)`;
+  if (name === 'img') return `![${escapeText(collapse(node.getAttribute('alt') ?? ''))}](<${encodeUrl(node.getAttribute('src')!)}>)`;
   return children();
 }
 
-function codeBlock(node) {
+function codeBlock(node: Element): string {
   const text = node.textContent.replace(/\r\n?/g, '\n');
   const fence = '`'.repeat(Math.max(3, longestTicks(text) + 1));
   const code = [...node.children].find(child => tag(child) === 'code');
@@ -74,7 +78,7 @@ function codeBlock(node) {
   return `${fence}${language}\n${text}${text.endsWith('\n') ? '' : '\n'}${fence}`;
 }
 
-function renderList(node, context) {
+function renderList(node: Element, context: Context): string {
   const start = node.getAttribute('start')?.trim() ?? '1';
   let number = /^[+-]?\d+$/.test(start) && Number.isSafeInteger(Number(start)) ? Number(start) : 1;
   return [...node.children].filter(child => tag(child) === 'li').map(item => {
@@ -87,7 +91,7 @@ function renderList(node, context) {
   }).join('\n');
 }
 
-function renderTable(node, context) {
+function renderTable(node: Element, context: Context): string {
   const rows = tableRows(node);
   if (!rows.flat().length) return '';
   const caption = [...node.children].find(child => tag(child) === 'caption');
@@ -97,17 +101,17 @@ function renderTable(node, context) {
   const rendered = rows.map(row => row.map(cell => {
     const value = escapeBlockStart(trimHtmlSpace(joinInline([...cell.childNodes].map(child => inline(child, { ...context, table: true })))));
     // Text pipes have already been escaped; code and URL pipes have not.
-    return value.replace(/(\\*)\|/g, (match, slashes) => slashes.length % 2 ? match : slashes + '\\|');
+    return value.replace(/(\\*)\|/g, (match: string, slashes: string) => slashes.length % 2 ? match : slashes + '\\|');
   }));
-  const header = rows[0].every(cell => tag(cell) === 'th') ? rendered.shift() : rows[0].map(() => '');
+  const header = rows[0].every(cell => tag(cell) === 'th') ? rendered.shift()! : rows[0].map(() => '');
   const widths = header.map((cell, index) => Math.max(3, sourceWidth(cell), ...rendered.map(row => sourceWidth(row[index]))));
-  const format = row => `| ${row.map((cell, index) => cell + ' '.repeat(widths[index] - sourceWidth(cell))).join(' | ')} |`;
+  const format = (row: string[]) => `| ${row.map((cell, index) => cell + ' '.repeat(widths[index] - sourceWidth(cell))).join(' | ')} |`;
   const table = [format(header), format(widths.map(width => '-'.repeat(width))), ...rendered.map(format)].join('\n');
   const captionText = caption ? flow(caption, context) : '';
   return captionText ? `${captionText}\n\n${table}` : table;
 }
 
-function block(node, context) {
+function block(node: Element, context: Context): string {
   const name = tag(node);
   if (name === 'pre') return codeBlock(node);
   if (name === 'hr') return '---';
@@ -121,20 +125,20 @@ function block(node, context) {
   return flow(node, context);
 }
 
-function flowBlocks(root, context) {
-  const blocks = [];
+function flowBlocks(root: Element, context: Context): Block[] {
+  const blocks: Block[] = [];
   let pending = '';
   const flush = () => {
     const text = escapeBlockStart(trimHtmlSpace(pending));
     if (text) blocks.push({ text, list: false });
     pending = '';
   };
-  const visit = node => {
-    if (node.nodeType === 1 && blockTags.has(tag(node))) {
+  const visit = (node: Node) => {
+    if (isElement(node) && blockTags.has(tag(node))) {
       flush();
       const text = block(node, context);
       if (text) blocks.push({ text, list: ['ol', 'ul'].includes(tag(node)) });
-    } else if (node.nodeType === 1 && !inlineTags.has(tag(node))) {
+    } else if (isElement(node) && !inlineTags.has(tag(node))) {
       // Unknown wrappers are transparent, including any block descendants.
       for (const child of node.childNodes) visit(child);
     } else pending = joinInline([pending, inline(node, context)]);
@@ -144,10 +148,10 @@ function flowBlocks(root, context) {
   return blocks;
 }
 
-function flow(root, context) { return flowBlocks(root, context).map(block => block.text).join('\n\n'); }
+function flow(root: Element, context: Context): string { return flowBlocks(root, context).map(block => block.text).join('\n\n'); }
 
-export function renderMarkdown(document) {
-  const render = (html, headingOffset) => {
+export function renderMarkdown(document: SemanticDocument) {
+  const render = (html: string, headingOffset: number) => {
     const root = fragmentRoot(html);
     // Transparent wrappers must not split a literal entity or punctuation run
     // into separately escaped fragments. Preserve semantic and code boundaries.

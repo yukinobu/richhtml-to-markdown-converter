@@ -1,12 +1,15 @@
-import { readPaste } from './paste.js';
+import { readPaste } from './paste.ts';
+import type { convert as convertHtml } from '../core/convert.ts';
+import type { Profile } from '../core/profile.ts';
 
-export function setupUI(document, navigator, convert, profiles) {
-  const byId = id => document.getElementById(id);
-  const input = byId('input');
-  const output = byId('output');
-  const method = byId('input-method');
-  const mode = byId('mode');
-  const copy = byId('copy');
+export function setupUI(document: Document, navigator: Navigator, convert: typeof convertHtml, profiles: Profile[]) {
+  // These IDs and element types are fixed by index.template.html.
+  const byId = (id: string) => document.getElementById(id)!;
+  const input = byId('input') as HTMLTextAreaElement;
+  const output = byId('output') as HTMLTextAreaElement;
+  const method = byId('input-method') as HTMLSelectElement;
+  const mode = byId('mode') as HTMLSelectElement;
+  const copy = byId('copy') as HTMLButtonElement;
   let revision = 0;
   const clearResult = () => {
     revision++;

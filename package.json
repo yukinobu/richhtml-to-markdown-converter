@@ -8,9 +8,11 @@
   },
   "scripts": {
     "test": "vitest run",
-    "build": "node scripts/build.mjs",
+    "build": "esbuild scripts/build.ts --bundle --platform=node --packages=external --format=esm --outfile=node_modules/.cache/richhtml/build.mjs && node node_modules/.cache/richhtml/build.mjs",
     "test:e2e": "playwright test",
-    "check": "npm test && npm run build && npm run test:e2e"
+    "check": "npm run typecheck && npm test && npm run build && npm run test:e2e",
+    "typecheck": "tsc --noEmit",
+    "audit:ts-migration": "esbuild scripts/audit-ts-migration.ts --bundle --platform=node --packages=external --format=esm --outfile=node_modules/.cache/richhtml/audit.mjs && node node_modules/.cache/richhtml/audit.mjs"
   },
   "dependencies": {
     "linkedom": "^0.18.13",
@@ -18,7 +20,9 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
+    "@types/node": "^20.19.43",
     "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.11",
     "yaml": "^2.9.0"
   }

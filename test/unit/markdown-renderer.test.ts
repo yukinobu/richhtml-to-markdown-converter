@@ -1,6 +1,8 @@
+import assert from 'node:assert/strict';
+import { success } from '../assertions.ts';
 import { it, expect, describe } from 'vitest';
-import { convert } from '../../src/core/convert.js';
-import { allowedUrl } from '../../src/core/normalize.js';
+import { convert } from '../../src/core/convert.ts';
+import { allowedUrl } from '../../src/core/normalize.ts';
 
 describe('fixed Markdown output', () => {
   it.each([
@@ -26,7 +28,7 @@ describe('fixed Markdown output', () => {
   ])('%s', (html, expected) => {
     const result = convert(html, { mode: 'generic-html' });
     expect(result.ok).toBe(true);
-    expect(result.markdown).toBe(expected);
+    expect(success(result).markdown).toBe(expected);
   });
 
   it('retains valid images even with no text and rejects empty content', () => {
@@ -38,7 +40,9 @@ describe('fixed Markdown output', () => {
   it('deduplicates and orders URL, table and list diagnostics', () => {
     const result = convert('<a href="/a">a</a><img src="/b" alt="b"><table><tr><td><p>c</p></td></tr></table><ol reversed><li value="4">d</li></ol>');
     expect(result.warnings.map(w => w.code)).toEqual(['LIST_NUMBERING_NORMALIZED', 'TABLE_FLATTENED', 'URL_DROPPED']);
-    expect(result.document.html).not.toMatch(/href|src|reversed|value/);
+    const document = success(result).document;
+    assert.ok(document.type === 'document');
+    expect(document.html).not.toMatch(/href|src|reversed|value/);
   });
 });
 
@@ -70,11 +74,11 @@ describe('readable Markdown preserves literal text and structure', () => {
     ['<blockquote><p>a<br>\n b</p><blockquote><p>nested</p></blockquote></blockquote>', '> a  \n> b\n>\n> > nested\n'],
     ['<pre><code>**literal**\n  # title &amp; &lt;x&gt;</code></pre>', '```\n**literal**\n  # title & <x>\n```\n'],
   ])('renders %s', (html, expected) => {
-    expect(convert(html, { mode: 'generic-html' }).markdown).toBe(expected);
+    expect(success(convert(html, { mode: 'generic-html' })).markdown).toBe(expected);
   });
 
   it('pads table columns by Markdown source width, including CJK, emoji and combining marks', () => {
     const html = '<table><tr><th>項目</th><th>値</th></tr><tr><td>ソース</td><td><strong>良い</strong></td></tr><tr><td>e\u0301</td><td>👩‍💻</td></tr><tr><td>ｱｲ</td><td>x|y</td></tr></table>';
-    expect(convert(html).markdown).toBe('| 項目   | 値       |\n| ------ | -------- |\n| ソース | **良い** |\n| e\u0301      | 👩‍💻       |\n| ｱｲ     | x\\|y     |\n');
+    expect(success(convert(html)).markdown).toBe('| 項目   | 値       |\n| ------ | -------- |\n| ソース | **良い** |\n| e\u0301      | 👩‍💻       |\n| ｱｲ     | x\\|y     |\n');
   });
 });

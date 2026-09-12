@@ -1,17 +1,27 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it, expect } from 'vitest';
-import { convert } from '../src/core/convert.js';
+import { convert } from '../src/core/convert.ts';
+import { success } from './assertions.ts';
+import type { Diagnostic } from '../src/core/document-model.ts';
+
+type Expected = {
+  mode: string;
+  ok: boolean;
+  profileId: string | null;
+  warnings: Pick<Diagnostic, 'code' | 'itemIndex'>[];
+  error?: Pick<Diagnostic, 'code' | 'itemIndex'>;
+};
 
 const base = new URL('./fixtures/', import.meta.url);
-const read = path => readFileSync(new URL(path, base), 'utf8');
-const diagnostic = ({ code, itemIndex }) => ({ code, ...(itemIndex === undefined ? {} : { itemIndex }) });
+const read = (path: string) => readFileSync(new URL(path, base), 'utf8');
+const diagnostic = ({ code, itemIndex }: Diagnostic) => ({ code, ...(itemIndex === undefined ? {} : { itemIndex }) });
 
 for (const category of readdirSync(base)) {
   for (const name of readdirSync(new URL(category + '/', base))) {
     const path = join(category, name);
     it(`fixture: ${path}`, () => {
-      const expected = JSON.parse(read(`${path}/expected.json`));
+      const expected: Expected = JSON.parse(read(`${path}/expected.json`));
       const result = convert(read(`${path}/input.html`), { mode: expected.mode });
       const actual = {
         mode: expected.mode, ok: result.ok, profileId: result.profileId,
@@ -19,7 +29,7 @@ for (const category of readdirSync(base)) {
         ...(!result.ok ? { error: diagnostic(result.error) } : {}),
       };
       expect(actual).toEqual(expected);
-      if (expected.ok) expect(result.markdown).toBe(read(`${path}/expected.md`));
+      if (expected.ok) expect(success(result).markdown).toBe(read(`${path}/expected.md`));
       else {
         expect(result).not.toHaveProperty('markdown');
         expect(result).not.toHaveProperty('document');
