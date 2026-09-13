@@ -11,7 +11,7 @@
 | npm | 11.19.0 |
 | Playwright Chromium | 153.0.8010.12 |
 | `npm test` | 単体・Profile・fixtureの142テスト成功 |
-| `npm run build` | `dist/rich-html-to-markdown.html` を生成 |
+| `npm run build` | `dist/richhtml-to-markdown.html` を生成 |
 | `npm run test:e2e` | `file://` で配布HTMLを開く操作を含む12テスト成功 |
 
 ブラウザテストではpasteイベントをDataTransferで生成し、コピーAPIは成功・不在・拒否を制御しています。OSの実クリップボードを使った確認ではありません。

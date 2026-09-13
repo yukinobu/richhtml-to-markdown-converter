@@ -6,7 +6,7 @@ ChatGPTの会話や一般的なHTMLをMarkdownへ変換できます。変換モ�
 
 ## 起動方法
 
-1. [リリースページ](https://github.com/yukinobu/richhtml-to-markdown-converter/releases)のAssetsから `rich-html-to-markdown.html` をダウンロードします。
+1. [リリースページ](https://github.com/yukinobu/richhtml-to-markdown-converter/releases)のAssetsから `richhtml-to-markdown.html` をダウンロードします。
 2. ダウンロードしたHTMLをブラウザで直接開きます。Node.jsやWebサーバーは必要ありません。
 
 入力方式「HTMLソース」を選ぶと、例えば `<h1>見出し</h1><p>本文</p>` を入力してConvertで変換できます。
@@ -278,7 +278,7 @@ Markdownはプレーンテキストであり、特定のアプリケーション
 利用者向けの配布物は1ファイルです。
 
 ```text
-rich-html-to-markdown.html
+richhtml-to-markdown.html
 ```
 
 このファイルをブラウザで直接開いて使用します。

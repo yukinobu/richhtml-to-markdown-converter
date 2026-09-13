@@ -14,5 +14,5 @@ jobs:
       - run: npm run check
       - uses: actions/upload-artifact@v4
         with:
-          name: rich-html-to-markdown
-          path: dist/rich-html-to-markdown.html
+          name: richhtml-to-markdown
+          path: dist/richhtml-to-markdown.html

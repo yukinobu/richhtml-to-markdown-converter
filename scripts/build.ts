@@ -22,5 +22,5 @@ const csp = `default-src 'none'; script-src ${hash(script)}; style-src ${hash(cs
 const html = template.replace('__CSP__', csp).replace('__STYLE__', () => css).replace('__SCRIPT__', () => script)
   + `\n<!-- Third-party notices\n${licenses.replace(/--/g, '—')}\n-->\n`;
 await mkdir('dist', { recursive: true });
-await writeFile('dist/rich-html-to-markdown.html', html);
-console.log(`Built dist/rich-html-to-markdown.html (${Buffer.byteLength(html).toLocaleString()} bytes)`);
+await writeFile('dist/richhtml-to-markdown.html', html);
+console.log(`Built dist/richhtml-to-markdown.html (${Buffer.byteLength(html).toLocaleString()} bytes)`);

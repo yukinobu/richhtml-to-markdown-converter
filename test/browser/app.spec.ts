@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-const appUrl = pathToFileURL(resolve('dist/rich-html-to-markdown.html')).href;
+const appUrl = pathToFileURL(resolve('dist/richhtml-to-markdown.html')).href;
 
 async function paste(page: Page, formats: Record<string, string>) {
   await page.locator('#input').evaluate((input, formats) => {

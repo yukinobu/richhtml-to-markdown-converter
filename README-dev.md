@@ -656,7 +656,7 @@ warningコードは各規則に記載したものを使用します。UI文言�
 │   └── profile-plugin.ts
 │
 └── dist/
-    └── rich-html-to-markdown.html
+    └── richhtml-to-markdown.html
 ```
 
 Profileは `.yaml` で管理し、ビルド時に検証してbundleへ埋め込みます。
@@ -976,7 +976,7 @@ npm run build
 ビルド成功後、
 
 ```text
-dist/rich-html-to-markdown.html
+dist/richhtml-to-markdown.html
 ```
 
 を生成します。ビルドスクリプト自身もesbuildで `node_modules/.cache/richhtml/build.mjs` に変換してからNode.jsで実行するため、Node.jsのネイティブTS実行機能や追加のTS実行ローダーは使いません。この中間ファイルはビルドごとに再生成し、配布物には含めません。
@@ -1046,7 +1046,7 @@ index.template.html         |
                    |
                    | build.ts
                    v
-dist/rich-html-to-markdown.html
+dist/richhtml-to-markdown.html
 ```
 
 最終HTMLには、
@@ -1059,7 +1059,7 @@ dist/rich-html-to-markdown.html
 
 ## 配布成果物の制約
 
-`dist/rich-html-to-markdown.html` は単独で動作しなければなりません。
+`dist/richhtml-to-markdown.html` は単独で動作しなければなりません。
 
 少なくとも以下を自動検証します。
 
