@@ -24,6 +24,13 @@ textarea::placeholder { color: #65756b; }
 .error { color: #a32220; }
 p:empty, ul:empty { display: none; }
 .diagnostics { margin-top: 20px; }
+.collection { margin: 0 0 24px; padding: 20px; border: 1px solid #aeb9b0; border-radius: 8px; background: #fff; overflow-wrap: anywhere; }
+.collection .output-heading { flex-wrap: wrap; gap: 12px; }
+.collection h2 { font-size: 1.1rem; margin: 0; }
+.collection button { font-size: .85rem; padding: 6px 12px; }
+.collection-note { color: #52665c; font-size: .9rem; }
+#collection-gaps li { margin: 12px 0; }
+#collection-count { font-weight: 700; }
 #warnings { color: #795515; background: #fff4db; border-radius: 6px; padding: 16px 16px 16px 36px; }
 footer { margin-top: 30px; color: #52665c; font-size: .85rem; }
 @media (max-width: 760px) { main { padding: 28px 18px; } .editors { grid-template-columns: 1fr; } textarea { min-height: 260px; } }

@@ -15,6 +15,9 @@
       <p>コピーしたHTMLから文書や会話を抽出します。変換はこのブラウザ内で完結します。</p>
     </header>
     <div class="controls">
+      <label for="workflow">取り込み方法
+        <select id="workflow"><option value="single">1回で変換</option><option value="collect">ChatGPT会話を複数回で取り込む</option></select>
+      </label>
       <label for="input-method">入力方式
         <select id="input-method"><option value="rich">リッチコピー</option><option value="source">HTMLソース</option></select>
       </label>
@@ -25,6 +28,20 @@
     </div>
     <p id="input-help">Webページを範囲選択してコピーし、入力欄へ貼り付けてください。HTMLを含むコピーを受け付けます。</p>
     <p id="input-error" class="error" role="alert"></p>
+    <section id="collection" class="collection" aria-labelledby="collection-heading" hidden>
+      <div class="output-heading"><h2 id="collection-heading">会話の取り込み状況</h2><button id="reset-collection" type="button">取り込みをリセット</button></div>
+      <p>同じ会話をスクロールし、少し重なる範囲をコピーして繰り返し貼り付けてください。ペーストごとに自動で追加します。</p>
+      <p>Developer Toolsの「Copy element」で取得したHTMLを「HTMLソース」で貼り付ける方法を推奨します。別の会話はリセットしてから取り込んでください。</p>
+      <div aria-live="polite" aria-atomic="true">
+        <p id="collection-count">取得済み：0件</p>
+        <p id="collection-batch"></p>
+        <p id="collection-ranges"></p>
+        <p id="collection-missing"></p>
+        <p id="collection-start"></p>
+        <ul id="collection-gaps"></ul>
+      </div>
+      <p class="collection-note">先頭・末尾や本文の完全性は確認できません。必要な発言が含まれるか確認してください。欠落があってもMarkdownをコピーできます。</p>
+    </section>
     <div class="editors">
       <section>
         <label for="input">入力HTML</label>

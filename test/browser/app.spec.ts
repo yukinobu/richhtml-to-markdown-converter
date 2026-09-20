@@ -199,3 +199,106 @@ test('converts captured ChatGPT structures through the standalone HTML without r
   }
   expect(requests).toEqual([]);
 });
+
+const collectionTurn = (number: number, text = `本文${number}`, id = `message-${number}`) =>
+  `<article data-testid="conversation-turn-${number}" data-turn="user"><div data-message-author-role="user" data-message-id="${id}"><p>${text}</p></div></article>`;
+
+async function collect(page: Page) {
+  await page.locator('#workflow').selectOption('collect');
+  await page.locator('#input-method').selectOption('source');
+}
+
+test('collects on paste, shows gap context, fills gaps and copies accumulated Markdown', async ({ page }) => {
+  await collect(page);
+  await expect(page.locator('#mode')).toHaveValue('chatgpt-conversation');
+  await expect(page.locator('#mode')).toBeDisabled();
+  await paste(page, { 'text/plain': collectionTurn(1, '最初の質問') + collectionTurn(4, '最後の質問') });
+  await expect(page.locator('#collection-count')).toHaveText('取得済み：2件');
+  await expect(page.locator('#collection-ranges')).toHaveText('取得範囲：1、4');
+  await expect(page.locator('#collection-missing')).toContainText('未取得：2〜3');
+  await expect(page.locator('#collection-gaps')).toContainText('最初の質問');
+  await expect(page.locator('#collection-gaps')).toContainText('最後の質問');
+  expect(await page.locator('#output').inputValue()).toContain('最初の質問');
+  await expect(page.locator('#copy')).toBeEnabled();
+  await paste(page, { 'text/plain': collectionTurn(2) + collectionTurn(3) + collectionTurn(4, '最後の質問') });
+  await expect(page.locator('#collection-batch')).toHaveText('今回の追加：新規2件、重複1件');
+  await expect(page.locator('#collection-ranges')).toHaveText('取得範囲：1〜4');
+  await expect(page.locator('#collection-missing')).toHaveText('取得した範囲内に欠番はありません。');
+  await expect(page.locator('#collection-gaps')).toBeEmpty();
+  await expect(page.locator('#warnings li')).toHaveCount(1);
+  const markdown = await page.locator('#output').inputValue();
+  expect(markdown.match(/^## User$/gm)).toHaveLength(4);
+  expect(markdown.indexOf('最初の質問')).toBeLessThan(markdown.indexOf('本文2'));
+  expect(markdown.indexOf('本文3')).toBeLessThan(markdown.indexOf('最後の質問'));
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text: string) => { window.copied = text; } } });
+  });
+  await page.locator('#copy').click();
+  expect(await page.evaluate(() => window.copied)).toBe(markdown);
+});
+
+test('failed pastes and conflicts preserve the collection; reset starts a different conversation', async ({ page }) => {
+  await collect(page);
+  await paste(page, { 'text/plain': collectionTurn(1) });
+  const markdown = await page.locator('#output').inputValue();
+  await paste(page, { 'text/html': '<p>wrong MIME</p>' });
+  await expect(page.locator('#input-error')).not.toBeEmpty();
+  await expect(page.locator('#output')).toHaveValue(markdown);
+  for (const html of ['<p>番号なし</p>', collectionTurn(2) + collectionTurn(1, '変更された本文'), collectionTurn(1, '別の会話', 'different')]) {
+    await paste(page, { 'text/plain': html });
+    await expect(page.locator('#conversion-error')).not.toBeEmpty();
+    await expect(page.locator('#collection-batch')).toContainText('今回の入力は追加していません');
+    await expect(page.locator('#collection-count')).toHaveText('取得済み：1件');
+    await expect(page.locator('#output')).toHaveValue(markdown);
+    await expect(page.locator('#copy')).toBeEnabled();
+  }
+  await page.locator('#reset-collection').click();
+  await expect(page.locator('#input')).toHaveValue('');
+  await expect(page.locator('#output')).toHaveValue('');
+  await expect(page.locator('#conversion-error')).toBeEmpty();
+  await expect(page.locator('#collection-count')).toHaveText('取得済み：0件');
+  await expect(page.locator('#copy')).toBeDisabled();
+  await paste(page, { 'text/plain': collectionTurn(1, '別の会話', 'different') });
+  expect(await page.locator('#output').inputValue()).toContain('別の会話');
+});
+
+test('manual additions, input method changes and workflow switches preserve collection state', async ({ page }) => {
+  await page.locator('#mode').selectOption('generic-html');
+  await collect(page);
+  await page.locator('#input').fill(collectionTurn(5));
+  await expect(page.locator('#collection-count')).toHaveText('取得済み：0件');
+  await page.locator('#convert').click();
+  await expect(page.locator('#collection-start')).toContainText('先頭が含まれていない');
+  const markdown = await page.locator('#output').inputValue();
+  await page.locator('#input').fill('編集中');
+  await expect(page.locator('#output')).toHaveValue(markdown);
+  await page.locator('#input-method').selectOption('rich');
+  await expect(page.locator('#output')).toHaveValue(markdown);
+  await paste(page, { 'text/html': collectionTurn(5) + collectionTurn(6) });
+  await expect(page.locator('#collection-batch')).toHaveText('今回の追加：新規1件、重複1件');
+  const accumulated = await page.locator('#output').inputValue();
+  await page.locator('#workflow').selectOption('single');
+  await expect(page.locator('#collection')).toBeHidden();
+  await expect(page.locator('#mode')).toBeEnabled();
+  await expect(page.locator('#mode')).toHaveValue('generic-html');
+  await paste(page, { 'text/html': '<p>単発変換</p>' });
+  await page.locator('#convert').click();
+  await expect(page.locator('#output')).toHaveValue('単発変換\n');
+  await page.locator('#workflow').selectOption('collect');
+  await expect(page.locator('#collection-count')).toHaveText('取得済み：2件');
+  await expect(page.locator('#output')).toHaveValue(accumulated);
+});
+
+test('collection and gap previews do not execute HTML or fetch resources', async ({ page }) => {
+  await collect(page);
+  const requests: string[] = [];
+  page.on('request', request => requests.push(request.url()));
+  await paste(page, { 'text/plain': collectionTurn(1, hostile) + collectionTurn(3, '&lt;img src=x onerror=alert(1)&gt;') });
+  await expect(page.locator('#collection-count')).toHaveText('取得済み：2件');
+  await expect(page.locator('#collection-gaps')).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('#collection img, #collection script')).toHaveCount(0);
+  expect(await page.evaluate(() => window.inputExecuted)).toBeUndefined();
+  expect(requests).toEqual([]);
+  expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);
+  expect(await page.evaluate(() => indexedDB.databases())).toEqual([]);
+});
